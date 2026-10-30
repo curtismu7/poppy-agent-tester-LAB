@@ -12,3 +12,11 @@ You need three things: a PingFederate, a Company, and this app reachable over ht
 3. **This app.** `PAT_AGENT_BASE_URL=https://agent.example PAT_AGENT_HOST=agent.example PAT_TLS_CERT=... PAT_TLS_KEY=... PAT_BIND=0.0.0.0 ./scripts/run.sh`. The URL must resolve to this machine from PingFederate and carry a certificate PingFederate trusts (set `NODE_EXTRA_CA_CERTS` for a local CA). The public name serves only `/client.json`, `/jwks.json` and the `/cb` sign-in redirect; the page and the API stay on loopback.
 
 Then open the page on loopback, type the Company origin and the issuer, and go through the three steps.
+
+## Scopes the Company advertises
+
+The Company's authorization server is the shared PingFederate, and it advertises 55 scopes that belong to several demos. This tester asks only for `accounts:read` (the default when the Company offers it). The other 54 are not Poppy offerings. Narrowing the advertised set was considered and not done: PingFederate has no scope group or virtual-issuer setting that hides scopes from its metadata, and other demos read the same metadata. The decision (2026-10-30, owner) is to keep PingFederate and document the shared set.
+
+## The protected_resources field
+
+PingFederate's metadata does not list `protected_resources` (spec 3.2). The Company's metadata shim adds it on the issuer's port, and the issuer string does not change.

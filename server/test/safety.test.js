@@ -40,6 +40,9 @@ test('hostCheck: loopback passes; a public agent name passes only for its three 
     assert.equal(run(hostCheck, { headers: { host: 'agent.example' }, method: 'GET', originalUrl: '/api/state' }).body.error, 'public_host_scope');
     assert.equal(run(hostCheck, { headers: { host: 'agent.example' }, method: 'POST', originalUrl: '/cb' }).status, 403);
     assert.equal(run(hostCheck, { headers: { host: 'evil.example' }, method: 'GET', originalUrl: '/client.json' }).body.error, 'bad_host');
+    // PAT_AGENT_HOST written with a port still means the bare name
+    process.env.PAT_AGENT_HOST = 'agent.example:5450';
+    assert.equal(run(hostCheck, { headers: { host: 'agent.example:5450' }, method: 'GET', originalUrl: '/client.json' }).nexted, true);
     assert.equal(run(hostCheck, { headers: {}, method: 'GET', originalUrl: '/' }).status, 403);
   } finally { if (old === undefined) delete process.env.PAT_AGENT_HOST; else process.env.PAT_AGENT_HOST = old; }
 });

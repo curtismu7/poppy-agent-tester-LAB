@@ -6,7 +6,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import express from 'express';
-import { hostCheck, sameOriginWrites } from './safety.js';
+import { hostCheck, isLoopbackHost, sameOriginWrites } from './safety.js';
 import { createHealth } from './health.js';
 import { hostedFrom, baseUrlFrom } from './config.js';
 import { createSessions } from './sessions.js';
@@ -32,7 +32,7 @@ const SCOPE_RE = /^[\x21\x23-\x5b\x5d-\x7e]+( [\x21\x23-\x5b\x5d-\x7e]+)*$/;
 
 const safePath = (p) => typeof p === 'string' && /^\/[A-Za-z0-9._~!$&'()*+,;=:@%/-]*$/.test(p) && !p.includes('//') && !p.split('/').includes('..');
 
-export function createApp({ configFile = CONFIG, agent, health = createHealth(), hosted = hostedFrom(), baseUrl = baseUrlFrom(), sessions = createSessions(), fetchImpl = (...a) => globalThis.fetch(...a) } = {}) {
+export function createApp({ configFile = CONFIG, agent, health = createHealth({ runtime: hostedFrom() ? 'offline' : 'live' }), hosted = hostedFrom(), baseUrl = baseUrlFrom(), sessions = createSessions(), fetchImpl = (...a) => globalThis.fetch(...a) } = {}) {
   const app = express();
   app.disable('x-powered-by');
   app.use(hostCheck);
@@ -55,16 +55,19 @@ export function createApp({ configFile = CONFIG, agent, health = createHealth(),
     pendingByState.delete(String(req.query.state || ''));
     const rec = ws && sessions.get(ws);
     if (!rec?.pending || rec.pending.state !== req.query.state) return res.status(400).type('text').send('Unknown or expired sign-in. Start again from the page.');
-    const { verifier, useResource } = rec.pending;
+    const { verifier, useResource, returnTo } = rec.pending;
     rec.pending = null;
+    // The sign-in redirect may land on the public agent name, which serves nothing else; send the browser back to the loopback page.
+    const home = (q) => `${returnTo || ''}/?${q}`;
     // RFC 9207: if the redirect carries an iss it must be the issuer this sign-in started with (a mix-up with another server is refused),
     // and if the issuer says it always sends one, its absence is refused too.
-    const iss = req.query.iss === undefined ? undefined : String(req.query.iss);
+    // A repeated or array-valued iss (?iss[]=...) is not a string and is refused, never coerced.
+    const iss = req.query.iss === undefined ? undefined : (typeof req.query.iss === 'string' ? req.query.iss : null);
     if ((iss !== undefined && iss !== rec.config.issuerClaim) || (iss === undefined && rec.config.issParamRequired)) {
-      sessions.log(ws, { kind: 'authorize', error: 'iss_mismatch', detail: `redirect iss ${iss === undefined ? 'missing' : iss.slice(0, 120)} does not match ${rec.config.issuerClaim}` });
-      return res.redirect('/?signin=error');
+      sessions.log(ws, { kind: 'authorize', error: 'iss_mismatch', detail: iss === null ? 'redirect carried iss more than once or not as text' : `redirect iss ${iss === undefined ? 'missing' : iss.slice(0, 120)} does not match ${rec.config.issuerClaim}` });
+      return res.redirect(home('signin=error'));
     }
-    if (req.query.error) { sessions.log(ws, { kind: 'authorize', error: String(req.query.error).slice(0, 80), detail: String(req.query.error_description || '').slice(0, 200) }); return res.redirect('/?signin=error'); }
+    if (req.query.error) { sessions.log(ws, { kind: 'authorize', error: String(req.query.error).slice(0, 80), detail: String(req.query.error_description || '').slice(0, 200) }); return res.redirect(home('signin=error')); }
     try {
       const req2 = tokenRequest({ tokenEndpoint: rec.config.tokenEndpoint, clientId: `${baseUrl}/client.json`, issuer: rec.config.issuerClaim, kid: agent.kid, signingKey: agent.privateKey, code: String(req.query.code || ''), redirectUri: redirectUri(), verifier, resource: useResource ? rec.config.resource : undefined });
       reach(req2.url);
@@ -73,10 +76,10 @@ export function createApp({ configFile = CONFIG, agent, health = createHealth(),
       let body; try { body = JSON.parse(text); } catch { body = null; }
       sessions.log(ws, { kind: 'token', request: { method: 'POST', url: req2.url, body: req2.body }, response: { status: r.status, body: body ?? text } });
       if (r.ok && body?.access_token) rec.token = { access_token: body.access_token, scope: body.scope, expires_in: body.expires_in, claims: decodeJws(body.access_token)?.payload ?? null };
-      return res.redirect(r.ok ? '/?signin=ok' : '/?signin=error');
+      return res.redirect(home(r.ok ? 'signin=ok' : 'signin=error'));
     } catch (e) {
       sessions.log(ws, { kind: 'token', error: e.message });
-      return res.redirect('/?signin=error');
+      return res.redirect(home('signin=error'));
     }
   });
 
@@ -161,7 +164,10 @@ export function createApp({ configFile = CONFIG, agent, health = createHealth(),
     const state = crypto.randomBytes(16).toString('base64url');
     // RFC 8707 resource: opt-in. PingFederate answers 400 to a resource URI it has not registered, so it is off unless the visitor turns it on.
     const useResource = req.body?.resource === true;
-    rec.pending = { state, verifier: pkce.verifier, useResource };
+    // The loopback page this came from (a loopback Host only), so the sign-in can return the browser to it.
+    const host = String(req.get('host') || '');
+    const returnTo = isLoopbackHost(host.replace(/:\d+$/, '').replace(/^\[|\]$/g, '')) ? `${req.protocol}://${host}` : null;
+    rec.pending = { state, verifier: pkce.verifier, useResource, returnTo };
     rec.config.scope = scope;
     pendingByState.set(state, ws);
     if (pendingByState.size > 1000) pendingByState.delete(pendingByState.keys().next().value);

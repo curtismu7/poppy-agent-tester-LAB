@@ -325,3 +325,52 @@ test('the public agent name serves only client.json, jwks.json and /cb', async (
     assert.equal(await call('/client.json', 'GET', 'evil.example'), 403);
   } finally { if (old === undefined) delete process.env.PAT_AGENT_HOST; else process.env.PAT_AGENT_HOST = old; }
 });
+
+// ---- second review: the public-name sign-in return, and the iss / body edge cases ----
+const hostGet = (path, host) => new Promise((res, rej) => {
+  const q = http.request({ host: '127.0.0.1', port: agentPort, path, method: 'GET', headers: { host } }, (r) => { r.resume(); res({ status: r.statusCode, location: r.headers.location }); });
+  q.on('error', rej); q.end();
+});
+
+test('the sign-in ends on the loopback page even when the redirect lands on the public agent name', async () => {
+  const old = process.env.PAT_AGENT_HOST;
+  process.env.PAT_AGENT_HOST = 'agent.example';
+  try {
+    const d = await post('/api/discover', { origin: originOf(company), issuer: originOf(pf) }, 'rt1');
+    assert.equal(d.status, 200);
+    const a = await (await post('/api/authorize', { scope: 'accounts:read' }, 'rt1')).json();
+    const toPf = await fetch(a.url, { redirect: 'manual' });
+    const back = new URL(toPf.headers.get('location'));
+    const cb = await hostGet(`${back.pathname}${back.search}`, 'agent.example');
+    assert.equal(cb.status, 302);
+    assert.equal(cb.location, `http://127.0.0.1:${agentPort}/?signin=ok`);
+    assert.equal((await (await get('/api/state', 'rt1')).json()).signedIn, true);
+  } finally { if (old === undefined) delete process.env.PAT_AGENT_HOST; else process.env.PAT_AGENT_HOST = old; }
+});
+
+test('an array-valued or repeated iss is refused as a mismatch, never coerced to the issuer', async () => {
+  const before = seen.tokenForms.length;
+  const cases = [
+    (i) => `&iss=${encodeURIComponent(i)}&iss=${encodeURIComponent(i)}`,
+    (i) => `&iss[]=${encodeURIComponent(i)}`,
+  ];
+  for (const [n, extraFor] of cases.entries()) {
+    const ws = `rt2-${n}`;
+    assert.equal((await post('/api/discover', { origin: originOf(company), issuer: originOf(pf) }, ws)).status, 200);
+    const a = await (await post('/api/authorize', { scope: 'accounts:read' }, ws)).json();
+    const toPf = await fetch(a.url, { redirect: 'manual' });
+    const back = new URL(toPf.headers.get('location'));
+    const r = await fetch(`${back.origin}${back.pathname}${back.search}${extraFor(originOf(pf))}`, { redirect: 'manual', signal: AbortSignal.timeout(5000) });
+    assert.match(r.headers.get('location') || '', /signin=error/, `${r.status} case ${n}`);
+  }
+  assert.equal(seen.tokenForms.length, before, 'no token request was made');
+});
+
+test('a Company whose document is JSON null is a clean refusal, not a crash', async () => {
+  const hardening = createApp({ agent: null, baseUrl: '', health: createHealth({ runChecks: async () => [], intervalMs: 3_600_000 }), fetchImpl: async (u) => new Response(u.endsWith('poppy.json') ? 'null' : '{}', { status: 200 }) });
+  const s = await listen(hardening);
+  const r = await fetch(`${originOf(s)}/api/discover`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-workspace': 'nul' }, body: JSON.stringify({ origin: 'https://company.example', issuer: 'https://pf.example' }) });
+  assert.equal(r.status, 400);
+  assert.equal((await r.json()).error, 'not_json');
+  s.close();
+});

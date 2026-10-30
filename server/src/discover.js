@@ -28,7 +28,10 @@ export async function getJson(url, fetchImpl = fetch) {
     if (e instanceof BodyTooLarge) throw new DiscoverError('too_large', `${url} is larger than ${MAX_BYTES} bytes`);
     throw e;
   }
-  try { return JSON.parse(text); } catch { throw new DiscoverError('not_json', `${url} is not JSON`); }
+  let doc;
+  try { doc = JSON.parse(text); } catch { throw new DiscoverError('not_json', `${url} is not JSON`); }
+  if (doc === null || typeof doc !== 'object' || Array.isArray(doc)) throw new DiscoverError('not_json', `${url} must be a JSON object`);
+  return doc;
 }
 
 /**

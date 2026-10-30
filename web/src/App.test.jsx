@@ -138,7 +138,9 @@ describe("shell", () => {
   it("Ctrl/Cmd+P (print) does not toggle presenter mode, and Home/End move across the tabs", async () => {
     mockApi();
     render(<App />);
+    // One modifier per assertion: a combined sequence toggles on and back off and can pass with the guard removed.
     fireEvent.keyDown(window, { key: "p", ctrlKey: true });
+    expect(screen.queryByTestId("presenter-say")).toBeNull();
     fireEvent.keyDown(window, { key: "P", metaKey: true });
     expect(screen.queryByTestId("presenter-say")).toBeNull();
     fireEvent.keyDown(screen.getByRole("tab", { name: "Run it" }), { key: "End" });

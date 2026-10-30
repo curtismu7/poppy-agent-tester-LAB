@@ -74,7 +74,7 @@ export function hostCheck(req, res, next) {
   const host = raw.startsWith('[') ? raw.slice(0, raw.indexOf(']') + 1) : raw.replace(/:\d+$/, '');
   if (isLoopbackHost(host)) return next();
   // PAT_AGENT_HOST is the agent's own public name (what PingFederate fetches client.json from); nothing else is accepted.
-  const agentHost = String(process.env.PAT_AGENT_HOST || '').toLowerCase();
+  const agentHost = String(process.env.PAT_AGENT_HOST || '').toLowerCase().replace(/:\d+$/, '');
   if (agentHost === '' || host.toLowerCase() !== agentHost) return res.status(403).json({ error: 'bad_host', message: 'Host must be a loopback name' });
   const path = String(req.originalUrl || req.url || '').split('?')[0];
   if (req.method !== 'GET' || !PUBLIC_PATHS.has(path)) return res.status(403).json({ error: 'public_host_scope', message: 'The public agent name serves only /client.json, /jwks.json and /cb' });

@@ -76,3 +76,19 @@ test('no ath when there is no access token yet', () => {
   const s = signSession({ delegation, delegatedKey: delegated, clientId: CLIENT, issuer: ISSUER, sid: 's', sub: 'u', method: 'GET', url: 'https://c.example/x' });
   assert.equal(decodeJws(s).payload.ath, undefined);
 });
+
+test('htu drops a fragment on its own and a query on its own', () => {
+  const { delegated, delegation } = setup();
+  const h = (url) => decodeJws(signSession({ delegation, delegatedKey: delegated, clientId: CLIENT, issuer: ISSUER, sid: 's', sub: 'u', method: 'GET', url, now: NOW })).payload.htu;
+  assert.equal(h('https://c.example/x#f'), 'https://c.example/x');
+  assert.equal(h('https://c.example/x?q=1'), 'https://c.example/x');
+  assert.equal(h('https://c.example/x'), 'https://c.example/x');
+});
+
+test('every delegation has its own jti and typ', () => {
+  const { agent, delegated } = setup();
+  const mk = () => decodeJws(signDelegation({ clientId: CLIENT, kid: 'a1', signingKey: agent.privateKey, delegatedPublicJwk: delegated.publicJwk, now: NOW }));
+  const a = mk(); const b = mk();
+  assert.notEqual(a.payload.jti, b.payload.jti);
+  assert.equal(a.header.typ, DELEGATION_TYP);
+});

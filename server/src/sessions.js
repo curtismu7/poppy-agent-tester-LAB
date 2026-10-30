@@ -1,6 +1,7 @@
 // Per-visitor state (rule 13): the workspace id picks one record, so one visitor's sign-in or Reset never touches another's.
 // A record holds the delegated key, the chosen Company, the PKCE pair of a sign-in in progress, the token, and a bounded step log.
 // Private keys never leave this module's callers: nothing here is serialised to the browser.
+import crypto from 'node:crypto';
 import { generateEs256Key } from './jose.js';
 
 export const MAX_STEPS = 60;
@@ -12,7 +13,7 @@ export function createSessions({ max = 500, ttlMs = 60 * 60 * 1000, now = Date.n
     for (const [id, v] of map) { if (t - v.at > ttlMs) map.delete(id); else break; }
     while (map.size > max) map.delete(map.keys().next().value);
   };
-  const fresh = () => ({ at: now(), delegated: generateEs256Key(), sid: `sid-${Math.random().toString(16).slice(2, 10)}`, config: null, discovery: null, pending: null, token: null, steps: [] });
+  const fresh = () => ({ at: now(), delegated: generateEs256Key(), sid: `sid-${crypto.randomBytes(16).toString('base64url')}`, config: null, discovery: null, pending: null, token: null, steps: [] });
   return {
     get(id) {
       sweep();

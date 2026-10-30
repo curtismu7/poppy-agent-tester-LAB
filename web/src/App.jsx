@@ -10,6 +10,7 @@ export const TABS = [
 ];
 // Never blank and never claims "not hosted" before it knows: until /api/info answers (or if it fails) it says both.
 export const BANNER_UNKNOWN = "LIVE or HOSTED SIMULATION: this page is loading. A local run talks to the Company and PingFederate you name; the hosted build only explains and shows an example.";
+export const BANNER_FAILED = "MODE UNKNOWN: the page could not read /api/info from its server, so it cannot say whether this is a live run or a hosted simulation. Every action is off until the server answers.";
 const BANNER_LOCAL = "LIVE: this agent talks to the real Company and the real PingFederate you name, and to nothing else. Only the person (a demo user) and the agent are test data.";
 const BANNER_HOSTED = "HOSTED SIMULATION: this build explains the flow and shows an example run with invented values. It reaches no Company and no PingFederate. Run the standalone to try it for real.";
 
@@ -44,6 +45,7 @@ export default function App() {
 
   useEffect(() => {
     const on = (e) => {
+      if (e.ctrlKey || e.metaKey || e.altKey) return; // Ctrl/Cmd+P is print, not presenter mode
       if (e.target && /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)) return;
       if (e.key === "p" || e.key === "P") setPresenter((v) => !v);
       else if (e.key === "Escape") setPresenter(false);
@@ -59,14 +61,16 @@ export default function App() {
   }, []);
 
   const onKeyTab = (e, i) => {
-    if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
-    const next = TABS[(i + (e.key === "ArrowRight" ? 1 : TABS.length - 1)) % TABS.length];
+    if (!["ArrowRight", "ArrowLeft", "Home", "End"].includes(e.key)) return;
+    e.preventDefault();
+    const next = e.key === "Home" ? TABS[0] : e.key === "End" ? TABS[TABS.length - 1] : TABS[(i + (e.key === "ArrowRight" ? 1 : TABS.length - 1)) % TABS.length];
     select(next.id);
     document.getElementById(`tab-${next.id}`)?.focus();
   };
 
   const hosted = info ? !!info.hosted : null;
-  const banner = hosted === true ? BANNER_HOSTED : hosted === false ? BANNER_LOCAL : BANNER_UNKNOWN;
+  const banner = info === null ? BANNER_FAILED : hosted === true ? BANNER_HOSTED : hosted === false ? BANNER_LOCAL : BANNER_UNKNOWN;
+  const chip = info === null ? "Server not answering" : hosted === true ? "Hosted simulation" : hosted === false ? "Live (local)" : "Loading";
   return (
     <div className={`app${presenter ? " app--presenter" : ""}`}>
       <header>
@@ -77,7 +81,7 @@ export default function App() {
             {!presenter && <p className="intro">Play the personal agent from the Personal Agent Protocol: discover a Company, sign in with a URL as your client id, and call its API with a signed Poppy-Session.</p>}
           </div>
           <div className="head__tools">
-            <span className="chip" data-testid="mode">{hosted === true ? "Hosted simulation" : hosted === false ? "Live (local)" : "Loading"}</span>
+            <span className="chip" data-testid="mode">{chip}</span>
             {!presenter && (
               <label className="inline">Vertical{" "}
                 <select value={vertical} onChange={(e) => setVertical(e.target.value)} data-testid="vertical">

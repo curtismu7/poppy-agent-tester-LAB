@@ -46,7 +46,7 @@ test('MODE=mock and PAT_HOSTED=1 are the hosted build; the default is a live loc
   assert.equal(hostedFrom({}), false);
   assert.equal(hostedFrom({ MODE: 'mock' }), true);
   assert.equal(hostedFrom({ PAT_HOSTED: '1' }), true);
-  assert.equal(modeFrom({ MODE: 'anything-else' }), 'live');
+  assert.equal(modeFrom({ MODE: 'anything-else' }), 'mock', 'an unknown mode fails closed');
 });
 
 test('the example run uses only reserved hosts, no private key, and says it is an example', () => {

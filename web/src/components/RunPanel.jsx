@@ -3,7 +3,8 @@ import { getJson, postJson } from "../api";
 import Json from "./Json";
 
 const ERR = { issuer_mismatch: "The issuer you typed is not the one the Company publishes.", hosted_simulation: "This hosted build explains and shows an example run; run the standalone to reach a real Company.", agent_not_configured: "Set PAT_AGENT_BASE_URL to the https URL PingFederate can reach, then restart.", discover_first: "Read the Company first.", sign_in_first: "Sign in first." };
-const say = (r) => ERR[r.body.error] || r.body.message || r.body.error || `HTTP ${r.status}`;
+// A server message that names the real values (the issuer the Company publishes, the host that failed) beats a generic one.
+const say = (r) => (r.body.error === "issuer_mismatch" || r.body.error === "upstream" || r.body.error === "no_sub" ? r.body.message : ERR[r.body.error]) || r.body.message || r.body.error || `HTTP ${r.status}`;
 
 function Step({ n, title, done, children }) {
   return (
@@ -24,6 +25,8 @@ export default function RunPanel({ info, resetSignal }) {
   const [msg, setMsg] = useState("");
   const [last, setLast] = useState(null);
   const [sample, setSample] = useState(null);
+  const [mismatch, setMismatch] = useState(null);
+  const [useResource, setUseResource] = useState(false);
   useEffect(() => { if (info?.hosted) getJson("/api/sample").then(setSample, () => setSample(null)); }, [info]);
 
   const refresh = useCallback(() => getJson("/api/state").then((s) => {
@@ -39,13 +42,14 @@ export default function RunPanel({ info, resetSignal }) {
 
   const run = async (name, fn) => { setBusy(name); setMsg(""); try { await fn(); } finally { setBusy(""); await refresh(); } };
   const discover = () => run("discover", async () => {
+    setMismatch(null);
     const r = await postJson("/api/discover", { origin, issuer });
-    if (!r.ok) return setMsg(say(r));
+    if (!r.ok) { setMismatch(r.body.discovery?.checks ?? null); return setMsg(r.status === 502 ? `Could not reach the Company or the issuer: ${r.body.message}. Check ${origin} and ${issuer}.` : say(r)); }
     setScope(Object.keys(r.body.poppy?.auth?.scopes ?? {})[0] ?? "");
     setMsg(r.body.ok ? "The Company's documents pass every check." : "The Company's documents have problems; see the checks.");
   });
   const signIn = () => run("authorize", async () => {
-    const r = await postJson("/api/authorize", { scope });
+    const r = await postJson("/api/authorize", { scope, resource: useResource });
     if (!r.ok) return setMsg(say(r));
     window.location.assign(r.body.url);
   });
@@ -56,6 +60,8 @@ export default function RunPanel({ info, resetSignal }) {
   });
 
   const hosted = info?.hosted === true;
+  const unknownMode = info === undefined || info === null; // until the server says live or hosted, no action is offered
+  const off = hosted || unknownMode;
   const scopes = state?.discovery?.poppy?.auth?.scopes ? Object.keys(state.discovery.poppy.auth.scopes) : [];
   return (
     <div className="gate">
@@ -67,7 +73,7 @@ export default function RunPanel({ info, resetSignal }) {
           <Json value={sample.steps} label="Example run steps" />
         </section>
       )}
-      {info && !info.configured && !hosted && <p className="panel panel--warn" data-testid="not-configured">Sign-in needs PAT_AGENT_BASE_URL (the https URL PingFederate can reach for this agent). Discovery still works.</p>}
+      {info && !info.configured && !hosted && <p className="panel panel--warn" data-testid="not-configured">Sign-in and calls need PAT_AGENT_BASE_URL (the https URL PingFederate can reach for this agent). Reading the Company works without it.</p>}
       <p className="sr-only" role="status" aria-live="polite">{msg}</p>
       {msg && <p className="panel" data-testid="msg">{msg}</p>}
 
@@ -76,10 +82,10 @@ export default function RunPanel({ info, resetSignal }) {
         <input id="origin" value={origin} onChange={(e) => setOrigin(e.target.value)} placeholder="https://company.example" spellCheck={false} autoComplete="off" />
         <label htmlFor="issuer">PingFederate issuer (must match what the Company publishes)</label>
         <input id="issuer" value={issuer} onChange={(e) => setIssuer(e.target.value)} placeholder="https://pingfederate.example:9031" spellCheck={false} autoComplete="off" />
-        <p><button type="button" onClick={discover} disabled={hosted || busy !== "" || !origin || !issuer} data-testid="discover">{busy === "discover" ? "Reading..." : "Read the Company"}</button></p>
-        {state?.discovery && (
+        <p><button type="button" onClick={discover} disabled={off || busy !== "" || !origin || !issuer} data-testid="discover">{busy === "discover" ? "Reading..." : "Read the Company"}</button></p>
+        {(mismatch || state?.discovery) && (
           <ul className="facts" aria-label="Discovery checks">
-            {state.discovery.checks.map((c) => <li key={c.id}><span className={`tag ${c.ok ? "tag--ok" : "tag--warn"}`}>{c.ok ? "pass" : "fail"}</span> {c.note}</li>)}
+            {(mismatch || state.discovery.checks).map((c) => <li key={c.id}><span className={`tag ${c.ok ? "tag--ok" : "tag--warn"}`}>{c.ok ? "pass" : c.level === "warn" ? "warn" : "fail"}</span> {c.note}</li>)}
           </ul>
         )}
       </Step>
@@ -90,14 +96,16 @@ export default function RunPanel({ info, resetSignal }) {
         <select id="scope" value={scope} onChange={(e) => setScope(e.target.value)} disabled={!scopes.length}>
           {scopes.length ? scopes.map((s) => <option key={s} value={s}>{s}</option>) : <option value="">(read the Company first)</option>}
         </select>
-        <p><button type="button" onClick={signIn} disabled={hosted || busy !== "" || !state?.discovery || !scope} data-testid="signin">Sign in through PingFederate</button></p>
+        <label className="inline" htmlFor="resource"><input id="resource" type="checkbox" checked={useResource} onChange={(e) => setUseResource(e.target.checked)} style={{ width: "auto", display: "inline", margin: "0 6px 0 0" }} />Send the Company as the resource (RFC 8707)</label>
+        <p className="muted">Off by default: PingFederate answers 400 to a resource URI it has not registered. Turn it on for an issuer that accepts it.</p>
+        <p><button type="button" onClick={signIn} disabled={off || busy !== "" || !state?.discovery || !scope} data-testid="signin">Sign in through PingFederate</button></p>
         {state?.token && (<><h3>Access token (raw, from PingFederate)</h3><Json value={state.token.access_token} label="Access token" /><h3>Decoded claims</h3><Json value={state.token.claims} label="Token claims" /></>)}
       </Step>
 
       <Step n={3} title="Call the Company with a Poppy-Session" done={last?.response?.status === 200}>
         <label htmlFor="path">Path on the Company origin</label>
         <input id="path" value={path} onChange={(e) => setPath(e.target.value)} spellCheck={false} autoComplete="off" />
-        <p><button type="button" onClick={call} disabled={hosted || busy !== "" || !state?.signedIn} data-testid="call">Call with token and Poppy-Session</button></p>
+        <p><button type="button" onClick={call} disabled={off || busy !== "" || !state?.signedIn} data-testid="call">Call with token and Poppy-Session</button></p>
         {last && (<>
           <h3>Request</h3><Json value={last.request} label="Request" />
           <h3>Response <span className={`tag ${last.response.status === 200 ? "tag--ok" : "tag--warn"}`}>{last.response.status}</span></h3><Json value={last.response.body} label="Response" />

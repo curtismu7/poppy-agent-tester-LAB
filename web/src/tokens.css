@@ -21,6 +21,11 @@
   --th-deny-text: #7f1d1d;
   --th-deny-bg: #fee2e2;
   --th-deny: #b5231a;
+  /* Controls (rule: dark-mode control contrast): every contrast below was computed, not eyeballed. */
+  --control-border: #6b7a8c;      /* >= 3.8:1 on page, card and inset */
+  --th-focus: #12538d;            /* focus ring, >= 6.9:1 */
+  --th-placeholder: #5a6675;      /* >= 5:1 */
+  --th-on-accent: #ffffff;        /* text on a filled accent: 6.5:1 */
   --radius-sm: 4px;
   --radius-md: 6px;
   --radius-lg: 10px;
@@ -59,5 +64,9 @@
     --th-deny-text: #fecaca;
     --th-deny-bg: #3b1414;
     --th-deny: #ef6b61;
+    --control-border: #8b9ab0;    /* >= 5.3:1 on page, card and inset */
+    --th-focus: #93c5fd;          /* >= 8.4:1 */
+    --th-placeholder: #a3b0c2;    /* >= 6.8:1 */
+    --th-on-accent: #0b1220;      /* text on a filled accent: 6.2:1 */
   }
 }

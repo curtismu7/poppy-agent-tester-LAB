@@ -2,8 +2,13 @@
 
 You need three things: a PingFederate, a Company, and this app reachable over https.
 
-1. **Company.** Any server that serves `/.well-known/poppy.json` and `/.well-known/oauth-protected-resource` with `resource` equal to its origin, and an API that checks the bearer token and the `Poppy-Session` header. AI-DEMO2 is one (its Poppy host).
-2. **PingFederate.** A CIMD policy for the agent's client metadata URL (`${PAT_AGENT_BASE_URL}/client.json`), restricted to a token manager whose `client_id` comes from the request, not from a hardcoded mapping. AI-DEMO2 has `scripts/provision-poppy-pf.js` that creates exactly that (dry run by default). Traps: PingFederate allows one exact URL per CIMD policy; CIMD clients cannot use `pi.flow`; it caches CIMD clients for at least 5 minutes; the policy's token manager only applies without the `openid` scope; the client assertion header must be `client-authentication+jwt`.
-3. **This app.** `PAT_AGENT_BASE_URL=https://agent.example PAT_AGENT_HOST=agent.example PAT_TLS_CERT=... PAT_TLS_KEY=... PAT_BIND=0.0.0.0 ./scripts/run.sh`. The URL must resolve to this machine from PingFederate and carry a certificate PingFederate trusts (set `NODE_EXTRA_CA_CERTS` for a local CA).
+1. **Company.** Any server that serves `/.well-known/poppy.json` (with `organization.domain` equal to its host and `protocol_version` 0.3) and `/.well-known/oauth-protected-resource` (with `resource` equal to its origin), and an API that checks the bearer token and the `Poppy-Session` header. It must list this agent's `client.json` URL as an allowed agent.
+2. **PingFederate.** Three objects, created through the admin API or console:
+   - a **JWT access token manager** of its own, with its own signing key id, whose attribute contract includes `client_id` (and `sub`), with the `client_id` claim taken from the request's `ClientId` (a CONTEXT source) rather than a hardcoded value;
+   - an **access token mapping** from your login adapter to that token manager that fulfils `client_id` from `CONTEXT / ClientId` and `sub` from the adapter's username;
+   - a **CIMD policy** for the agent's client metadata URL (`${PAT_AGENT_BASE_URL}/client.json`) whose default token manager is the one above, with `restrictToDefaultAccessTokenManager` on and PKCE required.
 
-Then open the page, type the Company origin and the issuer, and go through the three steps. The Company must list the agent's `client.json` URL as an allowed agent.
+   Traps: PingFederate allows one exact URL per CIMD policy; CIMD clients cannot use `pi.flow`; it caches CIMD clients for at least 5 minutes, so policy changes take that long to show; the policy's token manager only applies when the request has no `openid` scope; the client assertion header must be `client-authentication+jwt`; the consent form has a checked scope box that must stay checked or the token has no scope; a `resource` parameter (RFC 8707) is answered with HTTP 400 unless that resource URI is registered, so the tester sends it only when you tick the box.
+3. **This app.** `PAT_AGENT_BASE_URL=https://agent.example PAT_AGENT_HOST=agent.example PAT_TLS_CERT=... PAT_TLS_KEY=... PAT_BIND=0.0.0.0 ./scripts/run.sh`. The URL must resolve to this machine from PingFederate and carry a certificate PingFederate trusts (set `NODE_EXTRA_CA_CERTS` for a local CA). The public name serves only `/client.json`, `/jwks.json` and the `/cb` sign-in redirect; the page and the API stay on loopback.
+
+Then open the page on loopback, type the Company origin and the issuer, and go through the three steps.

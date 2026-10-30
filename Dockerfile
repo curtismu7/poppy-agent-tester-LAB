@@ -18,6 +18,7 @@ RUN npm ci --omit=dev -w server && npm cache clean --force
 COPY server/src server/src
 COPY server/diagrams server/diagrams
 COPY --from=build /app/web/dist web/dist
+RUN mkdir /data && chown node:node /data
 USER node
 EXPOSE 5450
 # Inside the container the server must listen on all interfaces, so PAT_BIND is set here on purpose.

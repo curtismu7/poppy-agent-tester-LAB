@@ -13,8 +13,11 @@ services:
       PAT_BIND: 0.0.0.0
       # The image defaults to MODE=mock (the hosted form). The local standalone is a live run, so compose says so.
       MODE: live
+      PAT_DATA_DIR: /data
       PAT_AGENT_BASE_URL: ${PAT_AGENT_BASE_URL:-}
     read_only: true
+    volumes:
+      - agent-data:/data
     cap_drop: [ALL]
     security_opt: ["no-new-privileges:true"]
     healthcheck:
@@ -24,3 +27,6 @@ services:
       start_interval: 2s
       timeout: 5s
       retries: 3
+
+volumes:
+  agent-data:

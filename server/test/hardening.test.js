@@ -30,7 +30,7 @@ test('the hosted guard fails closed: any mode but live, and any PAT_HOSTED but 0
   assert.equal(hostedFrom({ MODE: 'live' }), false);
   assert.equal(hostedFrom({ MODE: 'live', PAT_HOSTED: '0' }), false);
   assert.equal(hostedFrom({ MODE: 'live', PAT_HOSTED: 'false' }), false);
-  for (const env of [{ MODE: 'mock' }, { MODE: 'MOCK' }, { MODE: 'hosted' }, { MODE: 'Live' }, { PAT_HOSTED: '1' }, { PAT_HOSTED: 'true' }, { PAT_HOSTED: 'yes' }]) assert.equal(hostedFrom(env), true, JSON.stringify(env));
+  for (const env of [{ MODE: '' }, { MODE: 'mock' }, { MODE: 'MOCK' }, { MODE: 'hosted' }, { MODE: 'Live' }, { PAT_HOSTED: '1' }, { PAT_HOSTED: 'true' }, { PAT_HOSTED: 'yes' }]) assert.equal(hostedFrom(env), true, JSON.stringify(env));
   assert.equal(modeFrom({ MODE: 'typo' }), 'mock');
 });
 

@@ -11,7 +11,9 @@ import { createHealth } from '../src/health.js';
 import { verifyEs256 } from './helpers.js';
 
 const freePort = () => new Promise((res) => { const s = net.createServer().listen(0, '127.0.0.1', () => { const p = s.address().port; s.close(() => res(p)); }); });
-const listen = (app) => new Promise((res) => { const s = http.createServer(app).listen(0, '127.0.0.1', () => res(s)); });
+// Every server a test opens is closed in one after-hook, so a failing assertion cannot leave one listening.
+const opened = [];
+const listen = (app) => new Promise((res) => { const s = http.createServer(app).listen(0, '127.0.0.1', () => { opened.push(s); res(s); }); });
 const originOf = (s) => `http://127.0.0.1:${s.address().port}`;
 
 let agentPort; let appServer; let pf; let company; let app; let agentKey; let seen;
@@ -52,7 +54,7 @@ before(async () => {
   app = createApp({ agent: agentKey, baseUrl: base, sessions: createSessions(), health: createHealth({ runChecks: async () => [], intervalMs: 3_600_000 }), fetchImpl: (...a) => fetch(...a) });
   appServer = await new Promise((res) => { const s = http.createServer(app).listen(agentPort, '127.0.0.1', () => res(s)); });
 });
-after(() => { for (const s of [appServer, pf, company]) s.close(); });
+after(() => { for (const s of [appServer, pf, company, ...opened]) s.close(); });
 
 const post = (path, body, ws = 'w1') => fetch(`http://127.0.0.1:${agentPort}${path}`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-workspace': ws }, body: JSON.stringify(body ?? {}) });
 const get = (path, ws = 'w1') => fetch(`http://127.0.0.1:${agentPort}${path}`, { headers: { 'x-workspace': ws }, redirect: 'manual' });
@@ -146,7 +148,6 @@ test('the hosted build refuses every live endpoint', async () => {
   const sample = await (await fetch(`${originOf(s)}/api/sample`)).json();
   assert.equal(sample.example, true);
   assert.equal(sample.steps.length, 4);
-  s.close();
 });
 
 test('/api/health is demo-health/1 with runtime live', async () => {
@@ -276,7 +277,6 @@ test('discovery works without an agent URL (only sign-in and calls need one)', a
   assert.equal(d.status, 200);
   const a = await fetch(`${originOf(s)}/api/authorize`, { method: 'POST', headers: h, body: '{}' });
   assert.equal(a.status, 503);
-  s.close();
 });
 
 test('a malformed or oversized JSON body is a JSON 400/413, never an HTML stack trace', async () => {
@@ -305,7 +305,6 @@ test('the hosted build refuses authorize and call too, fast, and never opens a s
     assert.equal(r.status, 403, path);
     assert.equal((await r.json()).error, 'hosted_simulation', path);
   }
-  s.close();
 });
 
 test('the public agent name serves only client.json, jwks.json and /cb', async () => {
@@ -372,5 +371,4 @@ test('a Company whose document is JSON null is a clean refusal, not a crash', as
   const r = await fetch(`${originOf(s)}/api/discover`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-workspace': 'nul' }, body: JSON.stringify({ origin: 'https://company.example', issuer: 'https://pf.example' }) });
   assert.equal(r.status, 400);
   assert.equal((await r.json()).error, 'not_json');
-  s.close();
 });

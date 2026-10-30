@@ -13,10 +13,12 @@ const endless = () => { let pulled = 0; const res = new Response(new ReadableStr
 
 test('readCapped stops reading as soon as the cap is passed (it does not read an endless body)', async () => {
   const { res, pulled } = endless();
-  await assert.rejects(readCapped(res, 100 * 1024), BodyTooLarge);
+  const cut = new Promise((_, rej) => setTimeout(() => rej(new Error('still reading an endless body after 3 s')), 3000).unref());
+  await assert.rejects(Promise.race([readCapped(res, 100 * 1024), cut]), BodyTooLarge);
   assert.ok(pulled() < 10, `read only a few chunks, not the whole stream (${pulled()})`);
   assert.equal(await readCapped(streamOf(['ab', 'cd']), 10), 'abcd');
-  await assert.rejects(readCapped(new Response('x'.repeat(50), { headers: { 'content-length': '50' } }), 10), BodyTooLarge);
+  // the declared size alone refuses it: the body itself is short, so only the content-length pre-check can catch this
+  await assert.rejects(readCapped(new Response('x', { headers: { 'content-length': '50' } }), 10), BodyTooLarge);
   assert.match(await readClipped(streamOf(['x'.repeat(50)]), 10), /larger than 10 bytes/);
 });
 

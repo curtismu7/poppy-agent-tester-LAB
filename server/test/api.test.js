@@ -387,3 +387,29 @@ test('the default scope is accounts:read when advertised, not whatever is listed
   assert.equal(st.config.scope, 'accounts:read');
   s.close(); shared_s.close();
 });
+
+test('a typed host\'s permit is renewed when the sign-in reaches the token endpoint (not left to expire 30 s after discovery)', async () => {
+  const { permitExpiry, clearPermitted } = await import('../src/netguard.js');
+  clearPermitted();
+  const realNow = Date.now;
+  const t0 = realNow();
+  try {
+    Date.now = () => t0;
+    const d = await post('/api/discover', { origin: originOf(company), issuer: originOf(pf) }, 'pr1');
+    assert.equal(d.status, 200);
+    const a = await (await post('/api/authorize', { scope: 'accounts:read' }, 'pr1')).json();
+    const toPf = await fetch(a.url, { redirect: 'manual' });
+    const back = new URL(toPf.headers.get('location'));
+    const issuerHost = new URL(originOf(pf)).hostname;
+    const firstExpiry = permitExpiry(issuerHost);
+    assert.equal(firstExpiry, t0 + 30_000, 'discovery permits the issuer for 30 s');
+    // 31 s later the permit has run out; the callback must renew it before the token request
+    Date.now = () => t0 + 31_000;
+    const cb = await fetch(`${back.origin}${back.pathname}${back.search}`, { redirect: 'manual' });
+    assert.match(cb.headers.get('location') || '', /signin=ok/);
+    assert.equal(permitExpiry(issuerHost), t0 + 31_000 + 30_000, 'the callback renewed the permit');
+  } finally {
+    Date.now = realNow;
+    clearPermitted();
+  }
+});

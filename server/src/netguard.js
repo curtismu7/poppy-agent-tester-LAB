@@ -14,6 +14,8 @@ const PERMIT_MS = 30_000;
 const permitted = new Map(); // host -> expiry (ms)
 export const permitHost = (host, now = Date.now()) => { permitted.set(String(host).toLowerCase(), now + PERMIT_MS); };
 export const clearPermitted = () => { permitted.clear(); };
+// The time a typed host's permit runs out (ms since epoch), or null. Tests read it; nothing else does.
+export const permitExpiry = (host) => permitted.get(String(host).toLowerCase()) ?? null;
 const mayReach = (host) => {
   if (isLoopbackHost(host)) return true;
   const h = String(host).toLowerCase();

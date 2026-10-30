@@ -25,23 +25,28 @@ before(async () => {
 
   // A fake PingFederate: metadata, an authorize that redirects straight back, a token endpoint that checks the client assertion and PKCE.
   const pfApp = express();
-  pfApp.get('/.well-known/openid-configuration', (_q, r) => r.json({ authorization_endpoint: `${originOf(pf)}/as/authorization.oauth2`, token_endpoint: `${originOf(pf)}/as/token.oauth2` }));
-  pfApp.get('/as/authorization.oauth2', (q, r) => { seen.authorize = q.query; r.redirect(`${q.query.redirect_uri}?code=CODE1&state=${encodeURIComponent(q.query.state)}`); });
+  const pfMeta = () => ({ issuer: originOf(pf), authorization_endpoint: `${originOf(pf)}/as/authorization.oauth2`, token_endpoint: `${originOf(pf)}/as/token.oauth2`, ...(seen.pfMetaOverride || {}) });
+  pfApp.get('/.well-known/oauth-authorization-server', (_q, r) => r.json(pfMeta()));
+  pfApp.get('/.well-known/openid-configuration', (_q, r) => r.json(pfMeta()));
+  pfApp.get('/as/authorization.oauth2', (q, r) => { seen.authorize = q.query; const iss = seen.redirectIss === undefined ? originOf(pf) : seen.redirectIss; r.redirect(`${q.query.redirect_uri}?code=CODE1&state=${encodeURIComponent(q.query.state)}${iss === null ? '' : `&iss=${encodeURIComponent(iss)}`}`); });
   pfApp.post('/as/token.oauth2', express.urlencoded({ extended: false }), (q, r) => {
     seen.tokenForms.push(q.body);
     const a = verifyEs256(q.body.client_assertion, agentKey.publicJwk);
     const challengeOk = crypto.createHash('sha256').update(q.body.code_verifier).digest('base64url') === seen.authorize.code_challenge;
     if (!a.ok || a.header.typ !== 'client-authentication+jwt' || a.payload.aud !== originOf(pf) || !challengeOk || q.body.code !== 'CODE1') return r.status(400).json({ error: 'invalid_client' });
-    const claims = { client_id: seen.authorize.client_id, sub: 'person-1', scope: seen.authorize.scope };
+    const claims = { client_id: seen.authorize.client_id, scope: seen.authorize.scope, ...(seen.noSub ? {} : { sub: 'person-1' }) };
     r.json({ access_token: `${Buffer.from('{"alg":"none"}').toString('base64url')}.${Buffer.from(JSON.stringify(claims)).toString('base64url')}.s`, token_type: 'Bearer', expires_in: 60, scope: seen.authorize.scope });
   });
   pf = await listen(pfApp);
 
   // A fake Company: poppy.json, protected resource, and an API that records what it received.
   const coApp = express();
-  coApp.get('/.well-known/poppy.json', (_q, r) => r.json({ protocol_version: '0.3', auth: { issuer: originOf(pf), scopes: { 'accounts:read': 'Read accounts' }, scope_hints: { 'accounts:read': { changes: 'none', personal_data: true } } } }));
+  coApp.get('/.well-known/poppy.json', (_q, r) => r.json({ protocol_version: '0.3', organization: { domain: new URL(originOf(company)).host }, auth: { issuer: originOf(pf), scopes: { 'accounts:read': 'Read accounts' }, scope_hints: { 'accounts:read': { changes: 'none', personal_data: true } } } }));
   coApp.get('/.well-known/oauth-protected-resource', (_q, r) => r.json({ resource: originOf(company), authorization_servers: [originOf(pf)] }));
   coApp.get('/poppy/api/v1/me', (q, r) => { seen.calls.push(q.headers); r.json({ user_id: 'person-1' }); });
+  coApp.get('/poppy/api/v1/big', (_q, r) => r.type('text').send('x'.repeat(40 * 1024)));
+  coApp.get('/poppy/api/v1/redirect', (_q, r) => r.redirect(`${originOf(company)}/poppy/api/v1/landed`));
+  coApp.get('/poppy/api/v1/landed', (q, r) => { seen.landed = (seen.landed || 0) + 1; r.json({ landed: true }); });
   company = await listen(coApp);
 
   app = createApp({ agent: agentKey, baseUrl: base, sessions: createSessions(), health: createHealth({ runChecks: async () => [], intervalMs: 3_600_000 }), fetchImpl: (...a) => fetch(...a) });
@@ -149,4 +154,174 @@ test('/api/health is demo-health/1 with runtime live', async () => {
   assert.equal(h.schema, 'demo-health/1');
   assert.equal(h.runtime, 'live');
   assert.equal(h.demo.id, 'poppy-agent-tester');
+});
+
+// ---- review findings: the properties below had no test ----
+const signedIn = async (ws, { scope = 'accounts:read', resource } = {}) => {
+  const d = await post('/api/discover', { origin: originOf(company), issuer: originOf(pf) }, ws);
+  assert.equal(d.status, 200, 'discover');
+  const a = await (await post('/api/authorize', { scope, ...(resource === undefined ? {} : { resource }) }, ws)).json();
+  const toPf = await fetch(a.url, { redirect: 'manual' });
+  const cb = await fetch(toPf.headers.get('location'), { redirect: 'manual' });
+  return { a, cb, location: toPf.headers.get('location') };
+};
+
+test('the Company resource (RFC 8707) is sent on both requests only when asked for, and not by default', async () => {
+  const on = await signedIn('r1', { resource: true });
+  assert.equal(new URL(on.a.url).searchParams.get('resource'), originOf(company));
+  assert.equal(seen.tokenForms.at(-1).resource, originOf(company));
+  const off = await signedIn('r1b');
+  assert.equal(new URL(off.a.url).searchParams.has('resource'), false);
+  assert.equal(seen.tokenForms.at(-1).resource, undefined);
+  const strict = await signedIn('r1c', { resource: 'yes' }); // only a real true turns it on
+  assert.equal(new URL(strict.a.url).searchParams.has('resource'), false);
+});
+
+test('sign-in state is single-use: replaying /cb makes no second token request', async () => {
+  const { location } = await signedIn('r2');
+  const before = seen.tokenForms.length;
+  const replay = await fetch(location, { redirect: 'manual' });
+  assert.equal(replay.status, 400);
+  assert.equal(seen.tokenForms.length, before);
+});
+
+test('RFC 9207: a redirect from another issuer is refused before any token request', async () => {
+  seen.redirectIss = 'https://other-issuer.example';
+  try {
+    const before = seen.tokenForms.length;
+    const { cb } = await signedIn('r3');
+    assert.match(cb.headers.get('location'), /signin=error/);
+    assert.equal(seen.tokenForms.length, before, 'no code was sent anywhere');
+    assert.equal((await (await get('/api/state', 'r3')).json()).signedIn, false);
+  } finally { seen.redirectIss = undefined; }
+});
+
+test('RFC 9207: when the issuer says it always sends iss, a redirect without one is refused', async () => {
+  seen.pfMetaOverride = { authorization_response_iss_parameter_supported: true }; seen.redirectIss = null;
+  try {
+    const before = seen.tokenForms.length;
+    const { cb } = await signedIn('r4');
+    assert.match(cb.headers.get('location'), /signin=error/);
+    assert.equal(seen.tokenForms.length, before);
+  } finally { seen.pfMetaOverride = undefined; seen.redirectIss = undefined; }
+});
+
+test('a token without sub is refused rather than signed with a made-up user', async () => {
+  seen.noSub = true;
+  try { await signedIn('r5'); } finally { seen.noSub = false; }
+  const r = await post('/api/call', {}, 'r5');
+  assert.equal(r.status, 409);
+  assert.equal((await r.json()).error, 'no_sub');
+});
+
+test('call paths: // and .. are refused with bad_path once signed in', async () => {
+  await signedIn('r6');
+  for (const p of ['//evil.example/x', '/a/../b', '/a//b', 'no-slash', '/x y']) {
+    const r = await post('/api/call', { path: p }, 'r6');
+    assert.equal(r.status, 400, p);
+    assert.equal((await r.json()).error, 'bad_path', p);
+  }
+});
+
+test('the Company is never followed through a redirect, and a big response is clipped', async () => {
+  await signedIn('r7');
+  seen.landed = 0;
+  const redirected = await (await post('/api/call', { path: '/poppy/api/v1/redirect' }, 'r7')).json();
+  assert.equal(redirected.response.status, 302);
+  assert.equal(seen.landed, 0, 'the redirect target was never requested');
+  const big = await (await post('/api/call', { path: '/poppy/api/v1/big' }, 'r7')).json();
+  assert.match(String(big.response.body), /larger than 16384 bytes/);
+});
+
+test('an issuer whose endpoints sit on another origin is refused', async () => {
+  seen.pfMetaOverride = { token_endpoint: 'https://elsewhere.example/token' };
+  try {
+    const d = await post('/api/discover', { origin: originOf(company), issuer: originOf(pf) }, 'r8');
+    assert.equal(d.status, 400);
+    assert.equal((await d.json()).error, 'endpoint_origin');
+  } finally { seen.pfMetaOverride = undefined; }
+});
+
+test('a Company whose issuer metadata names a different issuer fails the check', async () => {
+  seen.pfMetaOverride = { issuer: 'https://not-the-issuer.example' };
+  try {
+    const d = await (await post('/api/discover', { origin: originOf(company), issuer: originOf(pf) }, 'r9')).json();
+    assert.equal(d.ok, false);
+    assert.equal(d.checks.find((c) => c.id === 'issuer_metadata').ok, false);
+  } finally { seen.pfMetaOverride = undefined; }
+});
+
+test('protected_resources is shown as a visible warning, and does not block the run', async () => {
+  const d = await (await post('/api/discover', { origin: originOf(company), issuer: originOf(pf) }, 'r10')).json();
+  const c = d.checks.find((x) => x.id === 'protected_resources');
+  assert.equal(c.ok, false);
+  assert.equal(c.level, 'warn');
+  // ok ignores warnings (it is false here only because the loopback test issuer is http, which the issuer check refuses)
+  assert.equal(d.ok, d.checks.filter((x) => x.level !== 'warn').every((x) => x.ok));
+  assert.equal(d.checks.find((x) => x.id === 'issuer').ok, false);
+});
+
+test('re-discovering clears a token, and Reset clears everything', async () => {
+  await signedIn('r11');
+  assert.equal((await (await get('/api/state', 'r11')).json()).signedIn, true);
+  await post('/api/discover', { origin: originOf(company), issuer: originOf(pf) }, 'r11');
+  assert.equal((await (await get('/api/state', 'r11')).json()).signedIn, false);
+});
+
+test('discovery works without an agent URL (only sign-in and calls need one)', async () => {
+  const bare = createApp({ agent: null, baseUrl: '', health: createHealth({ runChecks: async () => [], intervalMs: 3_600_000 }), fetchImpl: (...a) => fetch(...a) });
+  const s = await listen(bare);
+  const h = { 'content-type': 'application/json', 'x-workspace': 'b1' };
+  const d = await fetch(`${originOf(s)}/api/discover`, { method: 'POST', headers: h, body: JSON.stringify({ origin: originOf(company), issuer: originOf(pf) }) });
+  assert.equal(d.status, 200);
+  const a = await fetch(`${originOf(s)}/api/authorize`, { method: 'POST', headers: h, body: '{}' });
+  assert.equal(a.status, 503);
+  s.close();
+});
+
+test('a malformed or oversized JSON body is a JSON 400/413, never an HTML stack trace', async () => {
+  const bad = await fetch(`http://127.0.0.1:${agentPort}/api/discover`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-workspace': 'w1' }, body: '{nope' });
+  assert.equal(bad.status, 400);
+  assert.match(bad.headers.get('content-type'), /json/);
+  assert.equal((await bad.json()).error, 'bad_json');
+  const big = await fetch(`http://127.0.0.1:${agentPort}/api/discover`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-workspace': 'w1' }, body: JSON.stringify({ origin: 'x'.repeat(20000) }) });
+  assert.equal(big.status, 413);
+  assert.equal((await big.json()).error, 'body_too_large');
+});
+
+test('a cross-site write is refused, a same-site one too, a direct (none) one passes', async () => {
+  const mk = (site) => fetch(`http://127.0.0.1:${agentPort}/api/reset`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-workspace': 'sf', 'sec-fetch-site': site }, body: '{}' });
+  assert.equal((await mk('cross-site')).status, 403);
+  assert.equal((await mk('same-site')).status, 403);
+  assert.equal((await mk('none')).status, 200);
+  assert.equal((await mk('same-origin')).status, 200);
+});
+
+test('the hosted build refuses authorize and call too, fast, and never opens a socket', async () => {
+  const hosted = createApp({ agent: null, hosted: true, baseUrl: '', health: createHealth({ runChecks: async () => [], intervalMs: 3_600_000 }) });
+  const s = await listen(hosted);
+  for (const [path, body] of [['/api/discover', { origin: 'https://x.example', issuer: 'https://y.example' }], ['/api/authorize', {}], ['/api/call', {}]]) {
+    const r = await fetch(`${originOf(s)}${path}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body), signal: AbortSignal.timeout(3000) });
+    assert.equal(r.status, 403, path);
+    assert.equal((await r.json()).error, 'hosted_simulation', path);
+  }
+  s.close();
+});
+
+test('the public agent name serves only client.json, jwks.json and /cb', async () => {
+  const old = process.env.PAT_AGENT_HOST;
+  process.env.PAT_AGENT_HOST = 'agent.example';
+  try {
+    const call = (path, method = 'GET', host = 'agent.example') => new Promise((res, rej) => {
+      const q = http.request({ host: '127.0.0.1', port: agentPort, path, method, headers: { host } }, (r) => { r.resume(); res(r.statusCode); });
+      q.on('error', rej); q.end();
+    });
+    assert.equal(await call('/client.json'), 200);
+    assert.equal(await call('/jwks.json'), 200);
+    assert.equal(await call('/cb?state=nope'), 400); // reaches the handler, which refuses an unknown state
+    for (const p of ['/api/state', '/api/info', '/api/health', '/', '/index.html', '/api/discover']) assert.equal(await call(p), 403, p);
+    assert.equal(await call('/api/discover', 'POST'), 403);
+    assert.equal(await call('/client.json', 'POST'), 403);
+    assert.equal(await call('/client.json', 'GET', 'evil.example'), 403);
+  } finally { if (old === undefined) delete process.env.PAT_AGENT_HOST; else process.env.PAT_AGENT_HOST = old; }
 });

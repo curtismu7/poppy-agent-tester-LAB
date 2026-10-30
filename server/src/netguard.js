@@ -8,17 +8,27 @@ import { isLoopbackHost } from './safety.js';
 let active = null;
 
 // The one deliberate hole: hosts the visitor typed (the Company origin and its issuer). Everything else stays refused.
-const permitted = new Set();
-export const permitHost = (host) => { permitted.add(String(host).toLowerCase()); };
+// Each permit lasts PERMIT_MS and is renewed right before every outbound call of the visitor that typed the host, so one visitor's
+// host is never a standing hole for another, and a host nobody is using closes by itself.
+const PERMIT_MS = 30_000;
+const permitted = new Map(); // host -> expiry (ms)
+export const permitHost = (host, now = Date.now()) => { permitted.set(String(host).toLowerCase(), now + PERMIT_MS); };
 export const clearPermitted = () => { permitted.clear(); };
-const mayReach = (host) => isLoopbackHost(host) || permitted.has(String(host).toLowerCase());
+const mayReach = (host) => {
+  if (isLoopbackHost(host)) return true;
+  const h = String(host).toLowerCase();
+  const until = permitted.get(h);
+  if (until === undefined) return false;
+  if (until < Date.now()) { permitted.delete(h); return false; }
+  return true;
+};
 
 export function installNetguard() {
   if (active) return active;
   const attempts = [];
   const real = {
     connect: net.Socket.prototype.connect, lookup: dns.lookup, fetch: globalThis.fetch, send: dgram.Socket.prototype.send,
-    plookup: dns.promises.lookup,
+    plookup: dns.promises.lookup, dconnect: dgram.Socket.prototype.connect, lookupService: dns.lookupService, plookupService: dns.promises.lookupService,
   };
   // Every resolver entry point that can reach a real name server: dns.resolve*, dns.promises.resolve*, and Resolver instances.
   const RESOLVERS = ['resolve', 'resolve4', 'resolve6', 'resolveAny', 'resolveCaa', 'resolveCname', 'resolveMx', 'resolveNaptr', 'resolveNs', 'resolvePtr', 'resolveSoa', 'resolveSrv', 'resolveTxt', 'reverse'];
@@ -81,11 +91,27 @@ export function installNetguard() {
     if (!ok) { attempts.push(`udp:${addr}`); throw new Error(`network blocked: ${addr}`); }
     return real.send.apply(this, args);
   };
+  // A connected UDP socket sends with no address, so the address check in send() never sees the destination: guard connect() too.
+  dgram.Socket.prototype.connect = function guardedDgramConnect(port, address, cb) {
+    const addr = typeof address === 'string' ? address : undefined;
+    if (!(addr === undefined || isLoopbackHost(addr))) { attempts.push(`udp:${addr}`); throw new Error(`network blocked: ${addr}`); }
+    return real.dconnect.call(this, port, address, cb);
+  };
+  // lookupService does a real reverse lookup of an IP: refuse it for anything that is not loopback.
+  dns.lookupService = function guardedLookupService(address, port, cb) {
+    if (!isLoopbackHost(address)) { attempts.push(`dns:${address}`); const err = new Error(`network blocked: ${address}`); if (typeof cb === 'function') return cb(err); throw err; }
+    return real.lookupService.call(dns, address, port, cb);
+  };
+  dns.promises.lookupService = async function guardedPromiseLookupService(address, port) {
+    if (!isLoopbackHost(address)) { attempts.push(`dns:${address}`); throw new Error(`network blocked: ${address}`); }
+    return real.plookupService.call(dns.promises, address, port);
+  };
   active = {
     attempts,
     restore() {
       for (const [holder, name, orig] of savedResolvers) holder[name] = orig;
       dns.promises.lookup = real.plookup;
+      dgram.Socket.prototype.connect = real.dconnect; dns.lookupService = real.lookupService; dns.promises.lookupService = real.plookupService;
       net.Socket.prototype.connect = real.connect; dns.lookup = real.lookup; globalThis.fetch = real.fetch; dgram.Socket.prototype.send = real.send;
       active = null;
     },
@@ -106,7 +132,9 @@ export async function netguardSelfTest() {
   await refused('dns', () => new Promise((res, rej) => dns.lookup('self-test.invalid', (e) => (e ? rej(e) : res()))));
   await refused('dns-resolve', () => dns.promises.resolve4('self-test.invalid'));
   await refused('udp', () => { const s = dgram.createSocket('udp4'); try { s.send('x', 9, 'self-test.invalid'); } finally { s.close(); } });
+  await refused('udp-connect', () => { const s = dgram.createSocket('udp4'); try { s.connect(9, ['192', '0', '2', '1'].join('.')); } finally { s.close(); } });
+  await refused('lookup-service', () => dns.promises.lookupService(['192', '0', '2', '1'].join('.'), 80));
   const blocked = guard.attempts.length - before;
   guard.attempts.length = before; // self-test attempts are not real attempts
-  return { ok: tried.every((t) => t.endsWith(': blocked')) && blocked === 6, blocked, detail: tried.join('; ') };
+  return { ok: tried.every((t) => t.endsWith(': blocked')) && blocked === 8, blocked, detail: tried.join('; ') };
 }

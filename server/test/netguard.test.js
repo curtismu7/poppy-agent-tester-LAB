@@ -5,7 +5,7 @@ import { installNetguard, netguardSelfTest, permitHost, clearPermitted } from '.
 test('the self-test proves every route out is refused', async () => {
   const r = await netguardSelfTest();
   assert.equal(r.ok, true, r.detail);
-  assert.equal(r.blocked, 6);
+  assert.equal(r.blocked, 8);
 });
 
 test('an unlisted host is refused and recorded; a permitted one gets past the guard', async () => {

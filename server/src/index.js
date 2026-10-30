@@ -30,6 +30,6 @@ if (process.env.PAT_TLS_CERT && process.env.PAT_TLS_KEY) {
   server.listen(port, host, () => console.log(`[poppy-agent-tester] https://${host}:${port}/ (agent client_id ${baseUrlFrom() || 'not set'}/client.json)`));
 } else {
   const { url } = await startHttpServer({ port, host, app });
-  console.log(`[poppy-agent-tester] ${url} (loopback)`);
+  console.log(`[poppy-agent-tester] ${url} (${host === '127.0.0.1' || host === '::1' || host === 'localhost' ? 'loopback' : `bound to ${host}; in a container compose publishes it on 127.0.0.1 only`})`);
 }
 console.log(`[poppy-agent-tester] health: /api/health`);

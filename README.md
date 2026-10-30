@@ -26,4 +26,8 @@ See [docs/safety.md](docs/safety.md). Loopback bind, same-origin writes, outboun
 
 ## Status
 
-Proven against a local PingFederate with the AI-DEMO2 Company routers. Not shown: `protected_resources` in the issuer metadata (spec 3.3). The hosted example run is invented.
+Proven against a local PingFederate and a local Company that serves the Poppy documents and checks the `Poppy-Session` header. The hosted example run is invented.
+
+**Shown as a warning, not met:** the issuer metadata does not list `protected_resources` (spec 3). PingFederate has no setting for it we could find; the discovery panel shows it as `warn`.
+
+**Not exercised** (spec section 4 and beyond): refresh tokens, revocation, the device grant, DPoP, MCP servers. The tester does one authorization-code sign-in and one signed call at a time.

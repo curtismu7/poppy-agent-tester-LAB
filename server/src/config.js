@@ -1,6 +1,10 @@
-// Deployment configuration (rule 18). One image serves the local standalone and the hosted SE build.
-// MODE=mock (or PAT_HOSTED=1) is the hosted build: it explains and replays an example run, and every endpoint that would reach a real
-// server answers 403. The default is a live local run. It changes behaviour (live endpoints) and wording (the banner).
-export const modeFrom = (env = process.env) => (env.MODE === 'mock' ? 'mock' : 'live');
-export const hostedFrom = (env = process.env) => env.PAT_HOSTED === '1' || modeFrom(env) === 'mock';
+// Deployment configuration (rule 18). One image serves the local standalone and the hosted build.
+// The hosted build explains and shows an example run; every endpoint that would reach a real server answers 403. It FAILS CLOSED:
+// MODE unset or exactly 'live' is a live local run, and any other MODE value is the hosted build. PAT_HOSTED set to anything but
+// '', '0' or 'false' is the hosted build too. So a typo (MODE=MOCK, MODE=hosted, PAT_HOSTED=true) never starts a live build by accident.
+export const modeFrom = (env = process.env) => (env.MODE === undefined || env.MODE === '' || env.MODE === 'live' ? 'live' : 'mock');
+export const hostedFrom = (env = process.env) => {
+  const p = String(env.PAT_HOSTED ?? '').trim().toLowerCase();
+  return (p !== '' && p !== '0' && p !== 'false') || modeFrom(env) === 'mock';
+};
 export const baseUrlFrom = (env = process.env) => String(env.PAT_AGENT_BASE_URL || '').replace(/\/+$/, '');

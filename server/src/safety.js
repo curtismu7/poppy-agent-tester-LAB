@@ -65,13 +65,20 @@ export function cleanText(value, max = 80) {
   return String(value ?? '').replace(/[\u0000-\u001f\u007f-\u009f‪-‮⁦-⁩]/g, ' ').trim().slice(0, max);
 }
 
+// On the agent's public name only these GET paths exist: the two identity documents PingFederate fetches, and the sign-in redirect.
+// Everything else (the API, the page) is loopback-only, so reaching the public name never gives anyone the app.
+export const PUBLIC_PATHS = new Set(['/client.json', '/jwks.json', '/cb']);
+
 export function hostCheck(req, res, next) {
   const raw = String(req.headers.host || '');
   const host = raw.startsWith('[') ? raw.slice(0, raw.indexOf(']') + 1) : raw.replace(/:\d+$/, '');
+  if (isLoopbackHost(host)) return next();
   // PAT_AGENT_HOST is the agent's own public name (what PingFederate fetches client.json from); nothing else is accepted.
   const agentHost = String(process.env.PAT_AGENT_HOST || '').toLowerCase();
-  if (!isLoopbackHost(host) && !(agentHost !== '' && host.toLowerCase() === agentHost)) return res.status(403).json({ error: 'bad_host', message: 'Host must be a loopback name' });
-  next();
+  if (agentHost === '' || host.toLowerCase() !== agentHost) return res.status(403).json({ error: 'bad_host', message: 'Host must be a loopback name' });
+  const path = String(req.originalUrl || req.url || '').split('?')[0];
+  if (req.method !== 'GET' || !PUBLIC_PATHS.has(path)) return res.status(403).json({ error: 'public_host_scope', message: 'The public agent name serves only /client.json, /jwks.json and /cb' });
+  return next();
 }
 
 const WRITE = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);

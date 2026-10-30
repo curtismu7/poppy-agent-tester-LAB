@@ -9,8 +9,8 @@ jobs:
     runs-on: ${{ fromJSON(vars.RUNS_ON || '["self-hosted","macOS"]') }}
     strategy:
       matrix:
-        # Node 22 everywhere (owner decision 2026-10-27).
-        node: [22]
+        # Rule 8: Node 22 on pull requests, 20 and 22 on main.
+        node: ${{ github.event_name == 'pull_request' && fromJSON('[22]') || fromJSON('[20,22]') }}
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
@@ -20,7 +20,13 @@ jobs:
       - run: npm test
       - run: npm run build
       # A spare port in the range: the local container may hold 5450 on this runner.
-      - run: PORT=5159 npm run doctor
+      - run: PORT=5459 npm run doctor
+      # New apps' CI runs the standalone conformance gate (the runner is this Mac, which has demo-kit-base).
+      - name: conformance (--new)
+        run: |
+          gate="$HOME/Development/demo-kit-base/scripts/conformance.mjs"
+          if [ ! -f "$gate" ]; then echo "conformance.mjs missing on this runner"; exit 1; fi
+          node "$gate" . --tier=Demo --new
   secrets:
     runs-on: ${{ fromJSON(vars.RUNS_ON || '["self-hosted","macOS"]') }}
     steps:

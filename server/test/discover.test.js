@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { discover, parseOrigin, DiscoverError } from '../src/discover.js';
 
 const ORIGIN = 'https://company.example';
-const POPPY = { protocol_version: '0.3', auth: { issuer: 'https://pf.example:9031', scopes: { 'accounts:read': 'x' }, scope_hints: { 'accounts:read': { changes: 'none', personal_data: true } } } };
+const POPPY = { protocol_version: '0.3', organization: { domain: 'company.example' }, auth: { issuer: 'https://pf.example:9031', scopes: { 'accounts:read': 'x' }, scope_hints: { 'accounts:read': { changes: 'none', personal_data: true } } } };
 const RESOURCE = { resource: ORIGIN, authorization_servers: ['https://pf.example:9031'] };
 
 const fake = (map) => async (url) => {
@@ -15,7 +15,7 @@ const fake = (map) => async (url) => {
 test('a good Company passes every check', async () => {
   const r = await discover(ORIGIN, { fetchImpl: fake({ [`${ORIGIN}/.well-known/poppy.json`]: POPPY, [`${ORIGIN}/.well-known/oauth-protected-resource`]: RESOURCE }) });
   assert.equal(r.ok, true);
-  assert.equal(r.checks.length, 5);
+  assert.equal(r.checks.length, 6);
 });
 
 test('a resource that is not exactly the origin fails the resource check, and a missing scope_hint fails its check', async () => {

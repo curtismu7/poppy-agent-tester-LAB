@@ -10,11 +10,11 @@ export function newPkce() {
   return { verifier, challenge: crypto.createHash('sha256').update(verifier).digest('base64url'), method: 'S256' };
 }
 
-export function authorizationUrl({ authorizationEndpoint, clientId, redirectUri, scope, state, challenge }) {
+export function authorizationUrl({ authorizationEndpoint, clientId, redirectUri, scope, state, challenge, resource }) {
   const u = new URL(authorizationEndpoint);
-  u.search = new URLSearchParams({
-    response_type: 'code', client_id: clientId, redirect_uri: redirectUri, scope, state, code_challenge: challenge, code_challenge_method: 'S256',
-  }).toString();
+  const q = { response_type: 'code', client_id: clientId, redirect_uri: redirectUri, scope, state, code_challenge: challenge, code_challenge_method: 'S256' };
+  if (resource) q.resource = resource; // RFC 8707: the token is for this Company's protected resource
+  u.search = new URLSearchParams(q).toString();
   return u.toString();
 }
 
@@ -28,11 +28,13 @@ export function clientAssertion({ clientId, issuer, kid, signingKey, now = Math.
 }
 
 /** The token request as plain data, so the page can show it before it is sent. */
-export function tokenRequest({ tokenEndpoint, clientId, issuer, kid, signingKey, code, redirectUri, verifier }) {
-  const body = new URLSearchParams({
+export function tokenRequest({ tokenEndpoint, clientId, issuer, kid, signingKey, code, redirectUri, verifier, resource }) {
+  const form = {
     grant_type: 'authorization_code', code, redirect_uri: redirectUri, client_id: clientId, code_verifier: verifier,
     client_assertion_type: 'urn:ietf:params:oauth:client-assertion-type:jwt-bearer',
     client_assertion: clientAssertion({ clientId, issuer, kid, signingKey }),
-  });
+  };
+  if (resource) form.resource = resource;
+  const body = new URLSearchParams(form);
   return { url: tokenEndpoint, method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' }, body: body.toString() };
 }

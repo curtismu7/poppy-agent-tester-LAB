@@ -28,6 +28,9 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 const WEB_DIST = process.env.WEB_DIST || path.resolve(HERE, '../../web/dist');
 const CONFIG = process.env.CUSTOMER_CONFIG || path.resolve(HERE, '../../customer.config.json');
 const MAX_BODY = 16 * 1024;
+// The scope to ask for by default: the Company's own accounts:read when it is advertised, else the first one listed. A Company that
+// advertises many scopes (a shared authorization server) must not hand the tester an unrelated scope first.
+const defaultScope = (scopes) => (scopes.includes('accounts:read') ? 'accounts:read' : scopes[0] ?? '');
 const SCOPE_RE = /^[\x21\x23-\x5b\x5d-\x7e]+( [\x21\x23-\x5b\x5d-\x7e]+)*$/;
 
 const safePath = (p) => typeof p === 'string' && /^\/[A-Za-z0-9._~!$&'()*+,;=:@%/-]*$/.test(p) && !p.includes('//') && !p.split('/').includes('..');
@@ -147,7 +150,7 @@ export function createApp({ configFile = CONFIG, agent, health = createHealth({ 
     const rec = sessions.get(ws);
     rec.config = {
       origin, issuer, issuerClaim: d.issuer, resource: d.resource.resource, issParamRequired: meta.authorization_response_iss_parameter_supported === true,
-      authorizationEndpoint: meta.authorization_endpoint, tokenEndpoint: meta.token_endpoint, scope: Object.keys(d.poppy.auth?.scopes ?? {})[0] ?? '',
+      authorizationEndpoint: meta.authorization_endpoint, tokenEndpoint: meta.token_endpoint, scope: defaultScope(Object.keys(d.poppy.auth?.scopes ?? {})),
     };
     rec.discovery = { ok, checks, poppy: d.poppy, resource: d.resource };
     rec.token = null;

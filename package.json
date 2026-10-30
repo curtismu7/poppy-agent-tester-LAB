@@ -5,9 +5,16 @@
   "type": "module",
   "description": "Plays the Personal Agent from the Personal Agent Protocol (Poppy, Draft 0.3): discovers a Company, signs in with a client metadata URL and PKCE, signs every request with a Poppy-Session, shows each step.",
   "license": "MIT",
-  "workspaces": ["server"],
-  "engines": { "node": ">=20" },
+  "workspaces": [
+    "server",
+    "web"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
-    "test": "npm test -w server"
+    "test": "npm test -w server && npm test -w web",
+    "start": "npm start -w server",
+    "build": "npm run build -w web"
   }
 }

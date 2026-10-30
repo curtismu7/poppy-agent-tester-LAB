@@ -1,0 +1,122 @@
+{
+  "schema": "diagram-studio/1",
+  "id": "poppy-flow",
+  "title": "Poppy: discover, sign in, call the API",
+  "lede": "A personal agent identified by a URL discovers a Company, signs in through PingFederate with PKCE, then signs every request with a Poppy-Session. Each step below is one real request this app makes.",
+  "groups": {
+    "actor": {
+      "label": "The agent",
+      "color": "dark"
+    },
+    "idp": {
+      "label": "PingFederate",
+      "color": "blue"
+    },
+    "company": {
+      "label": "The Company",
+      "color": "red"
+    }
+  },
+  "nodes": [
+    {
+      "id": "agent",
+      "label": "Personal Agent (this app)",
+      "group": "actor",
+      "x": 0,
+      "y": 160
+    },
+    {
+      "id": "pf",
+      "label": "PingFederate",
+      "group": "idp",
+      "x": 320,
+      "y": 0
+    },
+    {
+      "id": "company",
+      "label": "Company API",
+      "group": "company",
+      "x": 320,
+      "y": 320
+    }
+  ],
+  "edges": [
+    {
+      "source": "agent",
+      "target": "company",
+      "label": "GET poppy.json + protected resource"
+    },
+    {
+      "source": "company",
+      "target": "agent",
+      "label": "scopes, issuer, APIs",
+      "dashed": true
+    },
+    {
+      "source": "agent",
+      "target": "pf",
+      "label": "authorize: client_id is a URL, PKCE"
+    },
+    {
+      "source": "pf",
+      "target": "agent",
+      "label": "code, then token (private_key_jwt)",
+      "dashed": true
+    },
+    {
+      "source": "agent",
+      "target": "company",
+      "label": "GET /me: Bearer + Poppy-Session"
+    },
+    {
+      "source": "company",
+      "target": "agent",
+      "label": "200: who the agent acts for",
+      "dashed": true
+    }
+  ],
+  "steps": [
+    {
+      "title": "Discover the Company",
+      "what": "The agent reads /.well-known/poppy.json and the protected-resource document from the one origin you typed, and checks what the spec requires.",
+      "edges": [
+        0
+      ]
+    },
+    {
+      "title": "The Company answers",
+      "what": "Scopes with scope_hints, the issuer, and the APIs an agent may call. The resource must be exactly the Company origin.",
+      "edges": [
+        1
+      ]
+    },
+    {
+      "title": "Ask to sign in",
+      "what": "The agent has no registered client. Its client_id is the URL of its own metadata document, and PingFederate fetches it. PKCE protects the code.",
+      "edges": [
+        2
+      ]
+    },
+    {
+      "title": "Get a token",
+      "what": "The agent exchanges the code, proving who it is with a signed assertion (private_key_jwt). The token's client_id is the agent URL.",
+      "edges": [
+        3
+      ]
+    },
+    {
+      "title": "Call the API",
+      "what": "Every request carries the token and a Poppy-Session: a delegation signed by the agent key, and a session signed by a short-lived delegated key.",
+      "edges": [
+        4
+      ]
+    },
+    {
+      "title": "The Company verifies",
+      "what": "It checks the token, then the session (delegation, method, URL, token hash, no replay) and answers.",
+      "edges": [
+        5
+      ]
+    }
+  ]
+}

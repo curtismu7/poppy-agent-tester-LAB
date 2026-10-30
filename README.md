@@ -20,6 +20,10 @@ Sign-in needs a PingFederate CIMD policy for this agent and the app reachable ov
 
 Press `P` for presenter mode; the simulation banner stays. The talk track is in [docs/talk-track.md](docs/talk-track.md). Brand it with `customer.config.json` (see the example) or the vertical picker.
 
+## On hold: the hosted (SE) form
+
+The `k8s/` manifests, `k8s/deploy.sh` and the `MODE=mock` hosted image form are kept but **on hold**: the SE cluster is not used until further notice (owner, 2026-10-30). The local Docker form above is the target. Nothing here deploys anywhere by itself.
+
 ## Safety
 
 See [docs/safety.md](docs/safety.md). Loopback bind, same-origin writes, outbound only to the two hosts you type, secrets never returned.

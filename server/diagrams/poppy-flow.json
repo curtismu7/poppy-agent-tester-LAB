@@ -23,21 +23,21 @@
       "label": "Personal Agent (this app)",
       "group": "actor",
       "x": 0,
-      "y": 160
+      "y": 150
     },
     {
       "id": "pf",
       "label": "PingFederate",
       "group": "idp",
-      "x": 320,
+      "x": 420,
       "y": 0
     },
     {
       "id": "company",
       "label": "Company API",
       "group": "company",
-      "x": 320,
-      "y": 320
+      "x": 420,
+      "y": 300
     }
   ],
   "edges": [

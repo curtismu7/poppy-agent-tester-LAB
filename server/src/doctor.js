@@ -24,7 +24,7 @@ export async function runChecks({ env = process.env } = {}) {
 
   add('diagrams', DIAGRAM_NAMES.every((n) => buildDiagram(n).steps.length > 0) ? 'pass' : 'fail', `${DIAGRAM_NAMES.length} diagram-studio/1 diagram loads and validates`);
   const ng = await netguardSelfTest();
-  add('netguard', ng.ok ? 'pass' : 'fail', ng.ok ? `blocked fetch, socket, socket-by-IP, dns lookup, dns resolve and udp to an unlisted host (${ng.blocked}/6)` : ng.detail);
+  add('netguard', ng.ok ? 'pass' : 'fail', ng.ok ? `blocked fetch, socket, socket-by-IP, dns lookup, dns resolve, udp send, udp connect and reverse lookup to an unlisted host (${ng.blocked}/8)` : ng.detail);
   return checks;
 }
 

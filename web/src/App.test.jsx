@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import App, { BANNER_UNKNOWN } from "./App";
+import App, { BANNER_FAILED, BANNER_UNKNOWN } from "./App";
 
 const json = (body, status = 200) => Promise.resolve({ ok: status < 400, status, json: () => Promise.resolve(body) });
 const STATE = { workspace: "w", config: null, discovery: null, signedIn: false, token: null, steps: [] };
@@ -37,11 +37,22 @@ describe("banner", () => {
     expect(screen.getByTestId("signin")).toBeDisabled();
     expect(screen.getByTestId("call")).toBeDisabled();
   });
-  it("falls back to the both-ways banner if /api/info fails", async () => {
+  it("says MODE UNKNOWN (not 'loading') when /api/info fails, and offers no action", async () => {
     mockApi({ info: "fail" });
     render(<App />);
-    await waitFor(() => expect(globalThis.fetch).toHaveBeenCalled());
+    await waitFor(() => expect(screen.getByTestId("banner").textContent).toBe(BANNER_FAILED));
+    expect(screen.getByTestId("mode").textContent).toBe("Server not answering");
+    fireEvent.change(screen.getByLabelText("Company origin"), { target: { value: "https://company.example" } });
+    fireEvent.change(screen.getByLabelText(/PingFederate issuer/), { target: { value: "https://pf.example" } });
+    expect(screen.getByTestId("discover")).toBeDisabled();
+    expect(screen.getByTestId("signin")).toBeDisabled();
+    expect(screen.getByTestId("call")).toBeDisabled();
+  });
+  it("offers no action while the mode is still loading", () => {
+    mockApi();
+    render(<App />);
     expect(screen.getByTestId("banner").textContent).toBe(BANNER_UNKNOWN);
+    expect(screen.getByTestId("discover")).toBeDisabled();
   });
 });
 
@@ -57,14 +68,47 @@ describe("run it", () => {
     fireEvent.click(screen.getByTestId("discover"));
     await waitFor(() => expect(screen.getByTestId("msg").textContent).toMatch(/pass every check/));
   });
-  it("shows a clear message when the issuer does not match", async () => {
-    mockApi({ post: { "/api/discover": json({ error: "issuer_mismatch" }, 400) } });
+  it("shows the issuer the Company really publishes, and the checks, when the issuer does not match", async () => {
+    mockApi({ post: { "/api/discover": json({ error: "issuer_mismatch", message: "The Company publishes issuer https://real-issuer.example, not the one you typed (https://other.example).", published: "https://real-issuer.example", discovery: { ok: false, checks: [{ id: "domain", ok: false, note: "organization.domain x must equal the host y" }] } }, 400) } });
     render(<App />);
     await waitFor(() => expect(screen.getByTestId("mode").textContent).toMatch(/Live/));
     fireEvent.change(screen.getByLabelText('Company origin'), { target: { value: "https://company.example" } });
     fireEvent.change(screen.getByLabelText(/PingFederate issuer/), { target: { value: "https://other.example" } });
     fireEvent.click(screen.getByTestId("discover"));
-    await waitFor(() => expect(screen.getByTestId("msg").textContent).toMatch(/not the one the Company publishes/));
+    await waitFor(() => expect(screen.getByTestId("msg").textContent).toMatch(/real-issuer\.example/));
+    expect(screen.getByLabelText("Discovery checks").textContent).toMatch(/organization\.domain/);
+  });
+  it("shows a warning check as 'warn' (not 'fail') and an unreachable host by name", async () => {
+    mockApi({ state: { ...DISCOVERED, discovery: { ...DISCOVERED.discovery, checks: [{ id: "resource", ok: true, note: "resource matches" }, { id: "protected_resources", ok: false, level: "warn", note: "issuer metadata lists nothing" }] } } });
+    render(<App />);
+    const list = await screen.findByLabelText("Discovery checks");
+    expect(list.textContent).toMatch(/warn/);
+    expect(list.textContent).not.toMatch(/fail/);
+  });
+  it("names the Company and issuer when one cannot be reached", async () => {
+    mockApi({ post: { "/api/discover": json({ error: "upstream", message: "fetch failed" }, 502) } });
+    render(<App />);
+    await waitFor(() => expect(screen.getByTestId("mode").textContent).toMatch(/Live/));
+    fireEvent.change(screen.getByLabelText("Company origin"), { target: { value: "https://company.example" } });
+    fireEvent.change(screen.getByLabelText(/PingFederate issuer/), { target: { value: "https://pf.example" } });
+    fireEvent.click(screen.getByTestId("discover"));
+    await waitFor(() => expect(screen.getByTestId("msg").textContent).toMatch(/Check https:\/\/company\.example and https:\/\/pf\.example/));
+  });
+  it("the resource option is off by default and is sent only when ticked", async () => {
+    const authorize = vi.fn(() => json({ url: "about:blank#x", clientId: "c" }));
+    mockApi({ state: DISCOVERED, post: { "/api/authorize": undefined } });
+    const base = globalThis.fetch;
+    globalThis.fetch = vi.fn((url, opts = {}) => (url === "/api/authorize" ? authorize(JSON.parse(opts.body)) : base(url, opts)));
+    render(<App />);
+    const box = await screen.findByLabelText(/Send the Company as the resource/);
+    expect(box).not.toBeChecked();
+    await waitFor(() => expect(screen.getByTestId("signin")).toBeEnabled());
+    fireEvent.click(screen.getByTestId("signin"));
+    await waitFor(() => expect(authorize).toHaveBeenCalledWith(expect.objectContaining({ resource: false })));
+    fireEvent.click(box);
+    expect(box).toBeChecked();
+    fireEvent.click(screen.getByTestId("signin"));
+    await waitFor(() => expect(authorize).toHaveBeenLastCalledWith(expect.objectContaining({ resource: true })));
   });
   it("enables sign-in after discovery, and the call only once signed in", async () => {
     mockApi({ state: DISCOVERED });
@@ -89,6 +133,19 @@ describe("shell", () => {
     expect(window.location.hash).toBe("#talk");
     expect(await screen.findByText("Why two headers")).toBeInTheDocument();
     fireEvent.keyDown(screen.getByRole("tab", { name: "Talk track" }), { key: "ArrowRight" });
+    expect(screen.getByRole("tab", { name: "Run it" })).toHaveAttribute("aria-selected", "true");
+  });
+  it("Ctrl/Cmd+P (print) does not toggle presenter mode, and Home/End move across the tabs", async () => {
+    mockApi();
+    render(<App />);
+    // One modifier per assertion: a combined sequence toggles on and back off and can pass with the guard removed.
+    fireEvent.keyDown(window, { key: "p", ctrlKey: true });
+    expect(screen.queryByTestId("presenter-say")).toBeNull();
+    fireEvent.keyDown(window, { key: "P", metaKey: true });
+    expect(screen.queryByTestId("presenter-say")).toBeNull();
+    fireEvent.keyDown(screen.getByRole("tab", { name: "Run it" }), { key: "End" });
+    expect(screen.getByRole("tab", { name: "Talk track" })).toHaveAttribute("aria-selected", "true");
+    fireEvent.keyDown(screen.getByRole("tab", { name: "Talk track" }), { key: "Home" });
     expect(screen.getByRole("tab", { name: "Run it" })).toHaveAttribute("aria-selected", "true");
   });
   it("presenter mode shows the talk track and keeps the banner; Esc leaves it", async () => {

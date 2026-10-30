@@ -6,12 +6,13 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import express from 'express';
-import { hostCheck, sameOriginWrites } from './safety.js';
+import { hostCheck, isLoopbackHost, sameOriginWrites } from './safety.js';
 import { createHealth } from './health.js';
 import { hostedFrom, baseUrlFrom } from './config.js';
 import { createSessions } from './sessions.js';
 import { workspaceFrom } from './workspaces.js';
-import { discover, parseOrigin, DiscoverError } from './discover.js';
+import { discover, parseOrigin, fetchIssuerMetadata, DiscoverError } from './discover.js';
+import { readClipped } from './body.js';
 import { newPkce, authorizationUrl, tokenRequest } from './oauth.js';
 import { clientMetadata, jwksDocument } from './agent.js';
 import { signDelegation, signSession } from './poppy.js';
@@ -29,10 +30,9 @@ const CONFIG = process.env.CUSTOMER_CONFIG || path.resolve(HERE, '../../customer
 const MAX_BODY = 16 * 1024;
 const SCOPE_RE = /^[\x21\x23-\x5b\x5d-\x7e]+( [\x21\x23-\x5b\x5d-\x7e]+)*$/;
 
-const clip = (text) => (text.length > MAX_BODY ? `${text.slice(0, MAX_BODY)}\n... (cut at ${MAX_BODY} characters)` : text);
 const safePath = (p) => typeof p === 'string' && /^\/[A-Za-z0-9._~!$&'()*+,;=:@%/-]*$/.test(p) && !p.includes('//') && !p.split('/').includes('..');
 
-export function createApp({ configFile = CONFIG, agent, health = createHealth(), hosted = hostedFrom(), baseUrl = baseUrlFrom(), sessions = createSessions(), fetchImpl = (...a) => globalThis.fetch(...a) } = {}) {
+export function createApp({ configFile = CONFIG, agent, health = createHealth({ runtime: hostedFrom() ? 'offline' : 'live' }), hosted = hostedFrom(), baseUrl = baseUrlFrom(), sessions = createSessions(), fetchImpl = (...a) => globalThis.fetch(...a) } = {}) {
   const app = express();
   app.disable('x-powered-by');
   app.use(hostCheck);
@@ -40,6 +40,8 @@ export function createApp({ configFile = CONFIG, agent, health = createHealth(),
   app.use((_req, res, next) => { res.set('X-Content-Type-Options', 'nosniff'); next(); });
 
   const redirectUri = () => `${baseUrl}/cb`;
+  // The visitor's typed hosts are reachable only for a short window, renewed right before each call (see netguard.js).
+  const reach = (...urls) => { for (const u of urls) permitHost(new URL(u).hostname); };
   const pendingByState = new Map(); // state -> workspace id, for the redirect that carries no header
   const ready = () => (agent && baseUrl ? null : 'agent_not_configured');
 
@@ -53,25 +55,38 @@ export function createApp({ configFile = CONFIG, agent, health = createHealth(),
     pendingByState.delete(String(req.query.state || ''));
     const rec = ws && sessions.get(ws);
     if (!rec?.pending || rec.pending.state !== req.query.state) return res.status(400).type('text').send('Unknown or expired sign-in. Start again from the page.');
-    const { verifier } = rec.pending;
+    const { verifier, useResource, returnTo } = rec.pending;
     rec.pending = null;
-    if (req.query.error) { sessions.log(ws, { kind: 'authorize', error: String(req.query.error).slice(0, 80), detail: String(req.query.error_description || '').slice(0, 200) }); return res.redirect('/?signin=error'); }
+    // The sign-in redirect may land on the public agent name, which serves nothing else; send the browser back to the loopback page.
+    const home = (q) => `${returnTo || ''}/?${q}`;
+    // RFC 9207: if the redirect carries an iss it must be the issuer this sign-in started with (a mix-up with another server is refused),
+    // and if the issuer says it always sends one, its absence is refused too.
+    // A repeated or array-valued iss (?iss[]=...) is not a string and is refused, never coerced.
+    const iss = req.query.iss === undefined ? undefined : (typeof req.query.iss === 'string' ? req.query.iss : null);
+    if ((iss !== undefined && iss !== rec.config.issuerClaim) || (iss === undefined && rec.config.issParamRequired)) {
+      sessions.log(ws, { kind: 'authorize', error: 'iss_mismatch', detail: iss === null ? 'redirect carried iss more than once or not as text' : `redirect iss ${iss === undefined ? 'missing' : iss.slice(0, 120)} does not match ${rec.config.issuerClaim}` });
+      return res.redirect(home('signin=error'));
+    }
+    if (req.query.error) { sessions.log(ws, { kind: 'authorize', error: String(req.query.error).slice(0, 80), detail: String(req.query.error_description || '').slice(0, 200) }); return res.redirect(home('signin=error')); }
     try {
-      const req2 = tokenRequest({ tokenEndpoint: rec.config.tokenEndpoint, clientId: `${baseUrl}/client.json`, issuer: rec.config.issuer, kid: agent.kid, signingKey: agent.privateKey, code: String(req.query.code || ''), redirectUri: redirectUri(), verifier });
+      const req2 = tokenRequest({ tokenEndpoint: rec.config.tokenEndpoint, clientId: `${baseUrl}/client.json`, issuer: rec.config.issuerClaim, kid: agent.kid, signingKey: agent.privateKey, code: String(req.query.code || ''), redirectUri: redirectUri(), verifier, resource: useResource ? rec.config.resource : undefined });
+      reach(req2.url);
       const r = await fetchImpl(req2.url, { method: 'POST', headers: req2.headers, body: req2.body, redirect: 'manual', signal: AbortSignal.timeout(10000) });
-      const text = clip(await r.text());
+      const text = await readClipped(r, MAX_BODY);
       let body; try { body = JSON.parse(text); } catch { body = null; }
       sessions.log(ws, { kind: 'token', request: { method: 'POST', url: req2.url, body: req2.body }, response: { status: r.status, body: body ?? text } });
       if (r.ok && body?.access_token) rec.token = { access_token: body.access_token, scope: body.scope, expires_in: body.expires_in, claims: decodeJws(body.access_token)?.payload ?? null };
-      return res.redirect(r.ok ? '/?signin=ok' : '/?signin=error');
+      return res.redirect(home(r.ok ? 'signin=ok' : 'signin=error'));
     } catch (e) {
       sessions.log(ws, { kind: 'token', error: e.message });
-      return res.redirect('/?signin=error');
+      return res.redirect(home('signin=error'));
     }
   });
 
   const api = express.Router();
   api.use(express.json({ limit: '8kb' }));
+  // A malformed body is a 400 in JSON, never Express's HTML error page (which carries a stack trace outside production).
+  api.use((err, _req, res, next) => { if (err) return res.status(err.status === 413 ? 413 : 400).json({ error: err.status === 413 ? 'body_too_large' : 'bad_json' }); return next(); });
   api.use('/health', health.router);
   api.get('/info', (_req, res) => { res.set('Cache-Control', 'no-store'); res.json({ hosted, simulated: hosted, agentClientId: baseUrl ? `${baseUrl}/client.json` : null, configured: !ready() }); });
   // customer.config.json is read on every request so editing it shows up on reload (rule 12).
@@ -80,9 +95,10 @@ export function createApp({ configFile = CONFIG, agent, health = createHealth(),
   api.get('/sample', (_req, res) => { res.set('Cache-Control', 'no-store'); res.json(buildSample()); });
   api.get('/diagram', (req, res) => { res.set('Cache-Control', 'no-store'); const name = DIAGRAM_NAMES.includes(req.query.name) ? req.query.name : DIAGRAM_NAMES[0]; res.json(buildDiagram(name)); });
 
-  const live = (handler) => async (req, res) => {
+  // Discovery needs no agent identity; sign-in and calls do (needsAgent).
+  const live = (handler, { needsAgent = true } = {}) => async (req, res) => {
     if (hosted) return res.status(403).json({ error: 'hosted_simulation', message: 'This hosted build explains and shows an example run. Run the standalone to reach a real Company and PingFederate.' });
-    if (ready()) return res.status(503).json({ error: ready() });
+    if (needsAgent && ready()) return res.status(503).json({ error: ready() });
     const ws = workspaceFrom(req);
     if (!ws) return res.status(400).json({ error: 'bad_workspace' });
     res.set('Cache-Control', 'no-store');
@@ -105,21 +121,38 @@ export function createApp({ configFile = CONFIG, agent, health = createHealth(),
     const { origin: typed, issuer: typedIssuer } = req.body || {};
     const origin = parseOrigin(typed);
     const issuer = parseOrigin(typedIssuer);
-    permitHost(new URL(origin).hostname);
+    reach(origin);
     const d = await discover(origin, { fetchImpl });
     sessions.log(ws, { kind: 'discover', request: { urls: [d.poppyUrl, d.resourceUrl] }, response: { checks: d.checks } });
-    if (new URL(d.poppy.auth?.issuer || 'x:').origin !== issuer) return res.status(400).json({ error: 'issuer_mismatch', message: `The Company publishes issuer ${d.poppy.auth?.issuer}, not the one you typed.`, discovery: d });
-    permitHost(new URL(issuer).hostname);
-    const oidc = await fetchImpl(`${issuer}/.well-known/openid-configuration`, { redirect: 'manual', signal: AbortSignal.timeout(8000) });
-    const meta = oidc.ok ? await oidc.json() : null;
-    if (!meta?.authorization_endpoint || !meta?.token_endpoint) return res.status(400).json({ error: 'issuer_metadata', message: `Could not read ${issuer}/.well-known/openid-configuration`, discovery: d });
-    for (const e of [meta.authorization_endpoint, meta.token_endpoint]) if (new URL(e).origin !== issuer) return res.status(400).json({ error: 'endpoint_origin', message: 'Issuer metadata points at another origin; refused.' });
+    const brief = { ok: false, checks: d.checks, poppy: d.poppy, resource: d.resource };
+    if (!d.issuer || new URL(d.issuer).origin !== issuer) return res.status(400).json({ error: 'issuer_mismatch', message: `The Company publishes issuer ${d.issuer ?? '(none)'}, not the one you typed (${issuer}).`, published: d.issuer ?? null, discovery: brief });
+    reach(issuer);
+    let im;
+    try { im = await fetchIssuerMetadata(d.issuer, { fetchImpl }); } catch (e) {
+      return res.status(400).json({ error: 'issuer_metadata', message: `Could not read the issuer's metadata (${e.message})`, discovery: brief });
+    }
+    const meta = im.meta;
+    if (!meta?.authorization_endpoint || !meta?.token_endpoint) return res.status(400).json({ error: 'issuer_metadata', message: `${im.url} has no authorization_endpoint and token_endpoint`, discovery: brief });
+    for (const e of [meta.authorization_endpoint, meta.token_endpoint]) {
+      let o = null; try { o = new URL(e).origin; } catch { /* not a URL */ }
+      if (o !== issuer) return res.status(400).json({ error: 'endpoint_origin', message: 'Issuer metadata points at another origin; refused.', discovery: brief });
+    }
+    // protected_resources (spec 3): the issuer should list this resource. PingFederate has no setting for it, so it is shown as a warning, not hidden.
+    const checks = [
+      ...d.checks,
+      { id: 'issuer_metadata', ok: meta.issuer === d.issuer, note: `${im.rfc8414 ? 'RFC 8414' : 'OpenID discovery'} metadata says issuer ${meta.issuer ?? 'missing'}; it must equal ${d.issuer}` },
+      { id: 'protected_resources', level: 'warn', ok: Array.isArray(meta.protected_resources) && meta.protected_resources.includes(d.resource.resource), note: `issuer metadata lists protected_resources ${JSON.stringify(meta.protected_resources ?? null)}; the spec expects ${d.resource.resource} there (PingFederate has no setting for it: UNVERIFIED that clients need it)` },
+    ];
+    const ok = checks.every((c) => c.level === 'warn' || c.ok);
     const rec = sessions.get(ws);
-    rec.config = { origin, issuer, authorizationEndpoint: meta.authorization_endpoint, tokenEndpoint: meta.token_endpoint, scope: Object.keys(d.poppy.auth?.scopes ?? {})[0] ?? '' };
-    rec.discovery = { ok: d.ok, checks: d.checks, poppy: d.poppy, resource: d.resource };
+    rec.config = {
+      origin, issuer, issuerClaim: d.issuer, resource: d.resource.resource, issParamRequired: meta.authorization_response_iss_parameter_supported === true,
+      authorizationEndpoint: meta.authorization_endpoint, tokenEndpoint: meta.token_endpoint, scope: Object.keys(d.poppy.auth?.scopes ?? {})[0] ?? '',
+    };
+    rec.discovery = { ok, checks, poppy: d.poppy, resource: d.resource };
     rec.token = null;
-    return res.json({ ok: d.ok, checks: d.checks, poppy: d.poppy, resource: d.resource, issuer: { authorization_endpoint: meta.authorization_endpoint, token_endpoint: meta.token_endpoint } });
-  }));
+    return res.json({ ok, checks, poppy: d.poppy, resource: d.resource, issuer: { authorization_endpoint: meta.authorization_endpoint, token_endpoint: meta.token_endpoint } });
+  }, { needsAgent: false }));
 
   // Step 2: build the authorization URL (PKCE, state). The browser follows it; the redirect comes back to /cb.
   api.post('/authorize', live(async (ws, req, res) => {
@@ -129,11 +162,16 @@ export function createApp({ configFile = CONFIG, agent, health = createHealth(),
     if (!SCOPE_RE.test(scope) || scope.length > 200) return res.status(400).json({ error: 'bad_scope' });
     const pkce = newPkce();
     const state = crypto.randomBytes(16).toString('base64url');
-    rec.pending = { state, verifier: pkce.verifier };
+    // RFC 8707 resource: opt-in. PingFederate answers 400 to a resource URI it has not registered, so it is off unless the visitor turns it on.
+    const useResource = req.body?.resource === true;
+    // The loopback page this came from (a loopback Host only), so the sign-in can return the browser to it.
+    const host = String(req.get('host') || '');
+    const returnTo = isLoopbackHost(host.replace(/:\d+$/, '').replace(/^\[|\]$/g, '')) ? `${req.protocol}://${host}` : null;
+    rec.pending = { state, verifier: pkce.verifier, useResource, returnTo };
     rec.config.scope = scope;
     pendingByState.set(state, ws);
     if (pendingByState.size > 1000) pendingByState.delete(pendingByState.keys().next().value);
-    const url = authorizationUrl({ authorizationEndpoint: rec.config.authorizationEndpoint, clientId: `${baseUrl}/client.json`, redirectUri: redirectUri(), scope, state, challenge: pkce.challenge });
+    const url = authorizationUrl({ authorizationEndpoint: rec.config.authorizationEndpoint, clientId: `${baseUrl}/client.json`, redirectUri: redirectUri(), scope, state, challenge: pkce.challenge, resource: useResource ? rec.config.resource : undefined });
     sessions.log(ws, { kind: 'authorize', request: { url } });
     return res.json({ url, clientId: `${baseUrl}/client.json` });
   }));
@@ -144,15 +182,18 @@ export function createApp({ configFile = CONFIG, agent, health = createHealth(),
     if (!rec.token) return res.status(409).json({ error: 'sign_in_first' });
     const p = req.body?.path ?? '/poppy/api/v1/me';
     if (!safePath(p)) return res.status(400).json({ error: 'bad_path' });
+    const sub = rec.token.claims?.sub;
+    if (typeof sub !== 'string' || !sub) return res.status(409).json({ error: 'no_sub', message: 'The access token has no sub claim, so the Poppy-Session cannot name the user. This tester needs a JWT access token.' });
     const url = `${rec.config.origin}${p}`;
     const clientId = `${baseUrl}/client.json`;
     const delegation = signDelegation({ clientId, kid: agent.kid, signingKey: agent.privateKey, delegatedPublicJwk: rec.delegated.publicJwk });
-    const session = signSession({ delegation, delegatedKey: rec.delegated, clientId, issuer: rec.config.issuer, sid: rec.sid, sub: rec.token.claims?.sub ?? rec.sid, method: 'GET', url, accessToken: rec.token.access_token });
+    const session = signSession({ delegation, delegatedKey: rec.delegated, clientId, issuer: rec.config.issuerClaim, sid: rec.sid, sub, method: 'GET', url, accessToken: rec.token.access_token });
     const trace = newTrace(req.headers.traceparent);
     const tp = formatTraceparent(trace.traceId, trace.span());
     const headers = { authorization: `Bearer ${rec.token.access_token}`, 'poppy-session': session, traceparent: tp, accept: 'application/json' };
+    reach(url);
     const r = await fetchImpl(url, { method: 'GET', headers, redirect: 'manual', signal: AbortSignal.timeout(10000) });
-    const text = clip(await r.text());
+    const text = await readClipped(r, MAX_BODY);
     let body; try { body = JSON.parse(text); } catch { body = text; }
     const step = { kind: 'call', request: { method: 'GET', url, headers, session: { header: decodeJws(session)?.header, payload: decodeJws(session)?.payload }, delegation: decodeJws(delegation) }, response: { status: r.status, body } };
     sessions.log(ws, step);

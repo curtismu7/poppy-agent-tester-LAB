@@ -56,3 +56,19 @@ test('client metadata: client_id is its own URL, private_key_jwt, jwks_uri on th
   const k = generateEs256Key();
   assert.equal(jwksDocument(k.publicJwk, 'a1').keys[0].d, undefined);
 });
+
+test('every client assertion has its own jti (PingFederate refuses a replayed one)', () => {
+  const k = generateEs256Key();
+  const mk = () => decodeJws(clientAssertion({ clientId: CLIENT, issuer: ISSUER, kid: 'a1', signingKey: k.privateKey, now: 1_800_000_000 })).payload.jti;
+  assert.notEqual(mk(), mk());
+});
+
+test('the resource parameter appears on the authorization URL and the token request only when given', () => {
+  const k = generateEs256Key();
+  const u = (resource) => new URL(authorizationUrl({ authorizationEndpoint: `${ISSUER}/a`, clientId: CLIENT, redirectUri: 'https://agent.example/cb', scope: 's', state: 'x', challenge: 'c', resource }));
+  assert.equal(u('https://company.example').searchParams.get('resource'), 'https://company.example');
+  assert.equal(u(undefined).searchParams.has('resource'), false);
+  const t = (resource) => new URLSearchParams(tokenRequest({ tokenEndpoint: `${ISSUER}/t`, clientId: CLIENT, issuer: ISSUER, kid: 'a1', signingKey: k.privateKey, code: 'C', redirectUri: 'https://agent.example/cb', verifier: 'V', resource }).body);
+  assert.equal(t('https://company.example').get('resource'), 'https://company.example');
+  assert.equal(t(undefined).has('resource'), false);
+});

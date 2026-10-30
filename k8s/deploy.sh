@@ -5,7 +5,7 @@
 #
 #   OWNER_APPROVED=1 NAMESPACE=<ns> IMAGE=<registry>/<repo>/poppy-agent-tester:<sha> SE_HOST=<host> INGRESS_CLASS=<class> CLUSTER_ISSUER=<issuer> k8s/deploy.sh [--dry-run]
 #
-# SE_HOST is a name two labels below the cluster's wildcard (for example gateway-claims.<cluster-host>): the cluster's external-dns creates
+# SE_HOST is a name two labels below the cluster's wildcard (for example poppy-agent-tester.<cluster-host>): the cluster's external-dns creates
 # its DNS record from the ingress, and cert-manager issues its certificate through CLUSTER_ISSUER. Both can take a few minutes.
 #
 # After the deploy (not done by this script): verify by CONTENT, not 200 (GET /api/info must say {mode:mock, simulated:true, hosted:true}),

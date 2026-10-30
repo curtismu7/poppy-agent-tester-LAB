@@ -24,27 +24,36 @@ function Box({ data }) {
 }
 const nodeTypes = { box: Box };
 
-// An edge that draws its own label, so a reply along the same pair of boxes can sit above or below its partner
-// instead of on top of it. data.dy is the vertical nudge in pixels.
+// An edge that draws its own label. A request and its reply run along the same pair of sides, so each is shifted sideways by
+// data.dy (up/down for left-right pairs, left/right for top-bottom pairs): two parallel arrows, two readable labels, nothing
+// looping out of the canvas.
 function LabelEdge({ id, sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, markerEnd, data }) {
-  const [path, lx, ly] = getBezierPath({ sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition });
+  const horizontal = sourcePosition === Position.Left || sourcePosition === Position.Right;
+  const sx = sourceX + (horizontal ? 0 : data.dy); const sy = sourceY + (horizontal ? data.dy : 0);
+  const tx = targetX + (horizontal ? 0 : data.dy); const ty = targetY + (horizontal ? data.dy : 0);
+  const [path, lx, ly] = getBezierPath({ sourceX: sx, sourceY: sy, targetX: tx, targetY: ty, sourcePosition, targetPosition });
   return (
     <>
       <BaseEdge id={id} path={path} markerEnd={markerEnd} />
       <EdgeLabelRenderer>
         <div className={`pat-elabel${data.now ? " pat-elabel--now" : ""}${data.dim ? " pat-elabel--dim" : ""}`} data-testid="edge-label"
-          style={{ transform: `translate(-50%, -50%) translate(${lx}px, ${ly + data.dy}px)` }}>{data.text}</div>
+          style={{ transform: `translate(-50%, -50%) translate(${lx}px, ${ly}px)` }}>{data.text}</div>
       </EdgeLabelRenderer>
     </>
   );
 }
 const edgeTypes = { label: LabelEdge };
 
-// Steps that run along the same pair of boxes in opposite directions get opposite nudges (-16 and +16 px).
+// Every step on the same pair of boxes (either direction) gets its own slot, spread evenly around the centre line, so a pair that
+// carries several requests and replies draws parallel arrows with separate labels (4 steps: -39, -13, +13, +39 px).
+const SLOT = 26;
 export function labelOffsets(steps) {
-  return steps.map((s, i) => {
-    if (steps.slice(0, i).some((o) => o.from === s.to && o.to === s.from)) return 16;
-    return steps.slice(i + 1).some((o) => o.from === s.to && o.to === s.from) ? -16 : 0;
+  const key = (s) => [s.from, s.to].sort().join('|');
+  const total = new Map(); const seen = new Map();
+  for (const s of steps) total.set(key(s), (total.get(key(s)) || 0) + 1);
+  return steps.map((s) => {
+    const k = key(s); const j = seen.get(k) || 0; seen.set(k, j + 1);
+    return (j - (total.get(k) - 1) / 2) * SLOT;
   });
 }
 
@@ -64,9 +73,8 @@ function Canvas({ pattern, positions, onMove, stepper }) {
   }));
   const offs = labelOffsets(pattern.steps);
   const edges = pattern.steps.map((s, i) => {
-    let [a, b] = sides(positions[s.from], positions[s.to]);
-    // A reply along the same pair of boxes leaves from the side instead, so the two arrows and labels do not overlap.
-    if (pattern.steps.slice(0, i).some((o) => o.from === s.to && o.to === s.from)) [a, b] = a === "l" || a === "r" ? ["b", "b"] : ["r", "r"];
+    // Each arrow leaves the side facing its target; a reply uses the same pair of sides as its request, shifted by labelOffsets.
+    const [a, b] = sides(positions[s.from], positions[s.to]);
     const cp = s.to === "rule";
     const now = stepper.step === i;
     const seen = stepper.step >= 0 && i <= stepper.step;
@@ -113,7 +121,7 @@ export default function PatternDiagram({ pattern, resetSignal = 0 }) {
       <ReactFlowProvider>
         <Canvas pattern={pattern} positions={positions} onMove={onMove} stepper={stepper} />
       </ReactFlowProvider>
-      <p className="keys">Drag any box. Mock-issued token values; hosts are examples. Moved: {Object.keys(positions).filter((k) => positions[k].x !== initial[k].x || positions[k].y !== initial[k].y).length} box(es).</p>
+      <p className="keys">Drag any box. Moved: {Object.keys(positions).filter((k) => positions[k].x !== initial[k].x || positions[k].y !== initial[k].y).length} box(es).</p>
     </section>
   );
 }

@@ -41,7 +41,7 @@ before(async () => {
 
   // A fake Company: poppy.json, protected resource, and an API that records what it received.
   const coApp = express();
-  coApp.get('/.well-known/poppy.json', (_q, r) => r.json({ protocol_version: '0.3', organization: { domain: new URL(originOf(company)).host }, auth: { issuer: originOf(pf), scopes: { 'accounts:read': 'Read accounts' }, scope_hints: { 'accounts:read': { changes: 'none', personal_data: true } } } }));
+  coApp.get('/.well-known/poppy.json', (_q, r) => r.json({ protocol_version: '0.3', organization: { domain: new URL(originOf(company)).hostname }, auth: { issuer: originOf(pf), scopes: { 'accounts:read': 'Read accounts' }, scope_hints: { 'accounts:read': { changes: 'none', personal_data: true } } } }));
   coApp.get('/.well-known/oauth-protected-resource', (_q, r) => r.json({ resource: originOf(company), authorization_servers: [originOf(pf)] }));
   coApp.get('/poppy/api/v1/me', (q, r) => { seen.calls.push(q.headers); r.json({ user_id: 'person-1' }); });
   coApp.get('/poppy/api/v1/big', (_q, r) => r.type('text').send('x'.repeat(40 * 1024)));

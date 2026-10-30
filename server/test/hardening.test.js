@@ -92,6 +92,8 @@ test('discovery checks: version, domain, optional issuer, and a missing domain a
   assert.equal((await ok({ ...base, organization: { domain: 'someone-else.example' } })).checks.find((c) => c.id === 'domain').ok, false);
   assert.equal((await ok({ ...base, organization: undefined })).checks.find((c) => c.id === 'domain').ok, false);
   assert.equal((await ok({ ...base, organization: { domain: 'COMPANY.example' } })).checks.find((c) => c.id === 'domain').ok, true, 'case-insensitive');
+  // a port, a scheme or a path is not a bare domain name, so it fails even when the host matches without the port
+  for (const d of ['company.example:8460', 'https://company.example', 'company.example/x']) assert.equal((await ok({ ...base, organization: { domain: d } })).checks.find((c) => c.id === 'domain').ok, false, d);
   // auth.issuer is optional when the protected-resource document lists exactly one server
   const noIssuer = await ok({ ...base, auth: { ...base.auth, issuer: undefined } });
   assert.equal(noIssuer.issuer, 'https://pf.example');

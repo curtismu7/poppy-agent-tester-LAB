@@ -50,7 +50,8 @@ export async function fetchIssuerMetadata(issuer, { fetchImpl = fetch } = {}) {
 /** Read poppy.json and the protected-resource document from one origin, and check what the spec requires of them. */
 export async function discover(originText, { fetchImpl = fetch } = {}) {
   const origin = parseOrigin(originText);
-  const host = new URL(origin).host;
+  // organization.domain is a bare domain name (spec 3.1): compared with the hostname, never with a port.
+  const host = new URL(origin).hostname;
   const poppyUrl = `${origin}/.well-known/poppy.json`;
   const resourceUrl = `${origin}/.well-known/oauth-protected-resource`;
   const poppy = await getJson(poppyUrl, fetchImpl);
@@ -60,7 +61,7 @@ export async function discover(originText, { fetchImpl = fetch } = {}) {
   const issuer = typeof poppy.auth?.issuer === 'string' ? poppy.auth.issuer : (servers.length === 1 ? servers[0] : undefined);
   const checks = [
     { id: 'version', ok: poppy.protocol_version === SUPPORTED_VERSION, note: `protocol_version ${poppy.protocol_version ?? 'missing'} (this tester speaks ${SUPPORTED_VERSION})` },
-    { id: 'domain', ok: typeof poppy.organization?.domain === 'string' && poppy.organization.domain.toLowerCase() === host.toLowerCase(), note: `organization.domain ${poppy.organization?.domain ?? 'missing'} must equal the host ${host}` },
+    { id: 'domain', ok: typeof poppy.organization?.domain === 'string' && /^[a-z0-9.-]+$/i.test(poppy.organization.domain) && poppy.organization.domain.toLowerCase() === host.toLowerCase(), note: `organization.domain ${poppy.organization?.domain ?? 'missing'} must be a bare domain name equal to the host ${host} (no scheme, port or path)` },
     { id: 'issuer', ok: typeof issuer === 'string' && issuer.startsWith('https://'), note: `issuer ${issuer ?? 'missing'}${typeof poppy.auth?.issuer === 'string' ? '' : ' (taken from the protected-resource document)'}` },
     { id: 'scope_hints', ok: Object.keys(poppy.auth?.scopes ?? {}).every((s) => poppy.auth?.scope_hints?.[s]), note: 'every scope has a scope_hint' },
     { id: 'resource', ok: resource.resource === origin, note: `resource ${resource.resource ?? 'missing'} must be exactly ${origin}` },

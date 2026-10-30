@@ -372,3 +372,18 @@ test('a Company whose document is JSON null is a clean refusal, not a crash', as
   assert.equal(r.status, 400);
   assert.equal((await r.json()).error, 'not_json');
 });
+
+test('the default scope is accounts:read when advertised, not whatever is listed first', async () => {
+  // A Company that lists an unrelated scope before accounts:read (a shared authorization server does this).
+  const shared = express();
+  shared.get('/.well-known/poppy.json', (_q, r) => r.json({ protocol_version: '0.3', organization: { domain: new URL(originOf(shared_s)).hostname }, auth: { issuer: originOf(pf), scopes: { 'audit:read': 'Unrelated', 'accounts:read': 'Read accounts' }, scope_hints: { 'audit:read': { changes: 'none', personal_data: false }, 'accounts:read': { changes: 'none', personal_data: true } } } }));
+  shared.get('/.well-known/oauth-protected-resource', (_q, r) => r.json({ resource: originOf(shared_s), authorization_servers: [originOf(pf)] }));
+  const shared_s = await listen(shared);
+  const s = await listen(createApp({ agent: agentKey, baseUrl: `http://127.0.0.1:${agentPort}`, health: createHealth({ runChecks: async () => [], intervalMs: 3_600_000 }), fetchImpl: (...a) => fetch(...a) }));
+  const ws = 'dsc1';
+  const d = await fetch(`${originOf(s)}/api/discover`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-workspace': ws }, body: JSON.stringify({ origin: originOf(shared_s), issuer: originOf(pf) }) });
+  assert.equal(d.status, 200, 'discover');
+  const st = await (await fetch(`${originOf(s)}/api/state`, { headers: { 'x-workspace': ws } })).json();
+  assert.equal(st.config.scope, 'accounts:read');
+  s.close(); shared_s.close();
+});

@@ -45,7 +45,8 @@ export default function RunPanel({ info, resetSignal }) {
     setMismatch(null);
     const r = await postJson("/api/discover", { origin, issuer });
     if (!r.ok) { setMismatch(r.body.discovery?.checks ?? null); return setMsg(r.status === 502 ? `Could not reach the Company or the issuer: ${r.body.message}. Check ${origin} and ${issuer}.` : say(r)); }
-    setScope(Object.keys(r.body.poppy?.auth?.scopes ?? {})[0] ?? "");
+    const offered = Object.keys(r.body.poppy?.auth?.scopes ?? {});
+    setScope(offered.includes("accounts:read") ? "accounts:read" : offered[0] ?? "");
     setMsg(r.body.ok ? "The Company's documents pass every check." : "The Company's documents have problems; see the checks.");
   });
   const signIn = () => run("authorize", async () => {

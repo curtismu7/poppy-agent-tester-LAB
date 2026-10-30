@@ -21,6 +21,7 @@ if (!allPassed(checks)) {
 const host = assertBindAllowed(bindHost(), process.env);
 const dataDir = process.env.PAT_DATA_DIR || path.resolve(fileURLToPath(new URL('../../.data', import.meta.url)));
 const hosted = hostedFrom(process.env);
+console.log(`[poppy-agent-tester] MODE=${process.env.MODE || 'live'}${hosted ? ' (hosted: explains and shows an example run, reaches nothing)' : ' (live: reaches only the hosts you type)'}`);
 const app = createApp({ agent: hosted ? null : loadAgentKey(dataDir), hosted, baseUrl: baseUrlFrom() });
 const port = resolvePort();
 if (process.env.PAT_TLS_CERT && process.env.PAT_TLS_KEY) {

@@ -2,7 +2,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import RunPanel from "./components/RunPanel";
 import DiagramTab from "./components/DiagramTab";
 import { getJson, resetWorkspace } from "./api";
-import { TALK } from "./talkTrack";
 
 export const TABS = [
   { id: "run", label: "Run it" },
@@ -10,14 +9,16 @@ export const TABS = [
   { id: "talk", label: "Talk track" },
 ];
 // Never blank and never claims "not hosted" before it knows: until /api/info answers (or if it fails) it says both.
-export const BANNER_UNKNOWN = "LIVE or HOSTED SIMULATION: this page is loading. A local run talks to the Company and PingFederate you name; the hosted build only explains and replays.";
+export const BANNER_UNKNOWN = "LIVE or HOSTED SIMULATION: this page is loading. A local run talks to the Company and PingFederate you name; the hosted build only explains and shows an example.";
 const BANNER_LOCAL = "LIVE: this agent talks to the real Company and the real PingFederate you name, and to nothing else. Only the person (a demo user) and the agent are test data.";
-const BANNER_HOSTED = "HOSTED SIMULATION: this build explains the flow and replays a recorded run. It reaches no Company and no PingFederate. Run the standalone to try it for real.";
+const BANNER_HOSTED = "HOSTED SIMULATION: this build explains the flow and shows an example run with invented values. It reaches no Company and no PingFederate. Run the standalone to try it for real.";
 
 const hashTab = () => { const h = window.location.hash.replace("#", ""); return TABS.some((t) => t.id === h) ? h : "run"; };
 
 export default function App() {
   const [info, setInfo] = useState(undefined); // undefined = loading, null = failed
+  const [vertical, setVertical] = useState("banking");
+  const [story, setStory] = useState(null);
   const [tab, setTab] = useState(hashTab());
   const [presenter, setPresenter] = useState(false);
   const [resetSignal, setResetSignal] = useState(0);
@@ -25,6 +26,8 @@ export default function App() {
   const tabsRef = useRef(null);
 
   useEffect(() => { getJson("/api/info").then(setInfo, () => setInfo(null)); }, []);
+  useEffect(() => { getJson(`/api/story?vertical=${encodeURIComponent(vertical)}`).then(setStory, () => setStory(null)); }, [vertical]);
+  const TALK = story ? story.talkTrack : [];
   useEffect(() => {
     const on = () => setTab(hashTab());
     window.addEventListener("hashchange", on);
@@ -75,6 +78,13 @@ export default function App() {
           </div>
           <div className="head__tools">
             <span className="chip" data-testid="mode">{hosted === true ? "Hosted simulation" : hosted === false ? "Live (local)" : "Loading"}</span>
+            {!presenter && (
+              <label className="inline">Vertical{" "}
+                <select value={vertical} onChange={(e) => setVertical(e.target.value)} data-testid="vertical">
+                  {(story ? story.verticals : ["banking"]).map((v) => <option key={v} value={v}>{v}</option>)}
+                </select>
+              </label>
+            )}
             <button type="button" onClick={reset} data-testid="reset">Reset</button>
             <button type="button" aria-pressed={presenter} onClick={() => setPresenter((v) => !v)} data-testid="presenter">{presenter ? "Exit presenter (Esc)" : "Presenter (P)"}</button>
           </div>

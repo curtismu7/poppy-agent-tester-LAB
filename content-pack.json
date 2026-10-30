@@ -1,0 +1,202 @@
+{
+  "schema": "demo-content-pack/1",
+  "id": "poppy-agent-tester",
+  "title": "Poppy Agent Tester",
+  "version": "0.1.0",
+  "demo": {
+    "id": "poppy-agent-tester",
+    "name": "Poppy Agent Tester",
+    "catalog": "D100",
+    "baseUrl": "http://localhost:5450",
+    "doctor": "/api/health",
+    "tags": [
+      "agent",
+      "poppy",
+      "pingfederate",
+      "cimd"
+    ]
+  },
+  "glossary": [
+    {
+      "id": "cimd",
+      "term": "Client metadata document (CIMD)",
+      "definition": "A client_id that is a URL. The authorization server fetches that URL to learn the client's name, redirect URIs and keys, so no one has to register the client first.",
+      "aliases": [
+        "client id metadata document"
+      ]
+    },
+    {
+      "id": "poppy-json",
+      "term": "poppy.json",
+      "definition": "A public document at /.well-known/poppy.json where a Company lists its issuer, scopes (each with a scope_hint) and APIs for personal agents.",
+      "aliases": [
+        "/.well-known/poppy.json"
+      ]
+    },
+    {
+      "id": "private-key-jwt",
+      "term": "private_key_jwt",
+      "definition": "Client authentication with a signed JWT instead of a secret. PingFederate expects the header typ client-authentication+jwt and the issuer as audience.",
+      "aliases": [
+        "client assertion"
+      ]
+    },
+    {
+      "id": "delegation",
+      "term": "Delegation JWT",
+      "definition": "A JWT signed by the agent's published key that names a short-lived delegated key (at most 24 hours). The delegated key then signs each Poppy-Session.",
+      "aliases": [
+        "pap_dlg"
+      ]
+    },
+    {
+      "id": "poppy-session",
+      "term": "Poppy-Session",
+      "definition": "A header JWT on every request that binds the agent, the method, the URL and the access token (ath), with a one-time jti. It is separate from the access token.",
+      "aliases": [
+        "Poppy-Session header"
+      ]
+    }
+  ],
+  "sources": [
+    {
+      "id": "poppy-spec",
+      "title": "Personal Agent Protocol, Draft 0.3",
+      "url": "https://personalagentprotocol.org/docs/introduction",
+      "kind": "standard",
+      "use": "Defines poppy.json, the protected-resource document and the Poppy-Session header.",
+      "status": "read",
+      "checked": "2026-10-29"
+    }
+  ],
+  "cards": [
+    {
+      "id": "step-say-first",
+      "label": "Say this first",
+      "description": "Fabrikam Bank's customer has a budgeting assistant of their own. The agent can use Fabrikam Bank's APIs without Fabrikam Bank registering it first: it names itself with a URL and signs everything it sends.",
+      "group": "try-it",
+      "action": {
+        "type": "route",
+        "href": "/#run"
+      },
+      "terms": [
+        "cimd"
+      ],
+      "story": "S01"
+    },
+    {
+      "id": "step-discover",
+      "label": "Discover",
+      "description": "The agent reads two public documents from Fabrikam Bank: poppy.json says which scopes and APIs exist, such as accounts:read, and the protected-resource document names the authorization server. The resource must be exactly the origin.",
+      "group": "try-it",
+      "action": {
+        "type": "route",
+        "href": "/#run"
+      },
+      "terms": [
+        "poppy-json"
+      ],
+      "story": "S02"
+    },
+    {
+      "id": "step-signin",
+      "label": "Sign in",
+      "description": "There is no client id to register. The client_id is the URL of the agent's metadata document, and PingFederate fetches it. The agent proves itself with a signed assertion, not a secret. The person signs in and allows accounts:read.",
+      "group": "try-it",
+      "action": {
+        "type": "route",
+        "href": "/#run"
+      },
+      "terms": [
+        "cimd",
+        "private-key-jwt"
+      ],
+      "story": "S03"
+    },
+    {
+      "id": "step-call",
+      "label": "Call",
+      "description": "Each request carries the access token and a Poppy-Session. The session is signed by a short-lived key that the agent's long-lived key vouched for, and it names this method, this URL and this token.",
+      "group": "try-it",
+      "action": {
+        "type": "route",
+        "href": "/#run"
+      },
+      "terms": [
+        "poppy-session",
+        "delegation"
+      ],
+      "story": "S04"
+    },
+    {
+      "id": "step-why",
+      "label": "Why two headers",
+      "description": "The token says what the person allowed. The session says which agent is asking right now, for this one request. A stolen token alone is not enough for Fabrikam Bank to accept the call.",
+      "group": "try-it",
+      "action": {
+        "type": "route",
+        "href": "/#diagram"
+      },
+      "terms": [
+        "poppy-session"
+      ],
+      "story": "S05"
+    },
+    {
+      "id": "step-unverified",
+      "label": "What we have not shown",
+      "description": "The issuer metadata does not yet list protected_resources, which the spec asks for. We found no PingFederate setting for it. UNVERIFIED: that every Poppy client will accept PingFederate's metadata without it.",
+      "group": "try-it",
+      "action": {
+        "type": "route",
+        "href": "/#run"
+      },
+      "terms": [
+        "poppy-json"
+      ],
+      "story": "S06"
+    },
+    {
+      "id": "ref-doctor",
+      "label": "Doctor and health",
+      "description": "Preflight checks and the demo-health/1 endpoint.",
+      "group": "setup",
+      "action": {
+        "type": "route",
+        "href": "/api/health"
+      }
+    }
+  ],
+  "stories": [
+    {
+      "id": "S01",
+      "title": "Say this first",
+      "say": "Fabrikam Bank's customer has a budgeting assistant of their own. The agent can use Fabrikam Bank's APIs without Fabrikam Bank registering it first: it names itself with a URL and signs everything it sends."
+    },
+    {
+      "id": "S02",
+      "title": "Discover",
+      "say": "The agent reads two public documents from Fabrikam Bank: poppy.json says which scopes and APIs exist, such as accounts:read, and the protected-resource document names the authorization server. The resource must be exactly the origin."
+    },
+    {
+      "id": "S03",
+      "title": "Sign in",
+      "say": "There is no client id to register. The client_id is the URL of the agent's metadata document, and PingFederate fetches it. The agent proves itself with a signed assertion, not a secret. The person signs in and allows accounts:read."
+    },
+    {
+      "id": "S04",
+      "title": "Call",
+      "say": "Each request carries the access token and a Poppy-Session. The session is signed by a short-lived key that the agent's long-lived key vouched for, and it names this method, this URL and this token."
+    },
+    {
+      "id": "S05",
+      "title": "Why two headers",
+      "say": "The token says what the person allowed. The session says which agent is asking right now, for this one request. A stolen token alone is not enough for Fabrikam Bank to accept the call."
+    },
+    {
+      "id": "S06",
+      "title": "What we have not shown",
+      "say": "The issuer metadata does not yet list protected_resources, which the spec asks for. We found no PingFederate setting for it. UNVERIFIED: that every Poppy client will accept PingFederate's metadata without it."
+    }
+  ]
+}

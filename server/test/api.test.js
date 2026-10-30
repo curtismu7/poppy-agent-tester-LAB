@@ -138,6 +138,9 @@ test('the hosted build refuses every live endpoint', async () => {
   const r = await fetch(`${originOf(s)}/api/discover`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ origin: 'https://x.example', issuer: 'https://y.example' }) });
   assert.equal(r.status, 403);
   assert.equal((await r.json()).error, 'hosted_simulation');
+  const sample = await (await fetch(`${originOf(s)}/api/sample`)).json();
+  assert.equal(sample.example, true);
+  assert.equal(sample.steps.length, 4);
   s.close();
 });
 

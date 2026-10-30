@@ -18,7 +18,7 @@ export async function runChecks({ env = process.env } = {}) {
   add('port-range', problem ? 'fail' : 'pass', problem || `${port} is inside ${PORT_MIN}-${PORT_MAX} and not reserved`);
 
   const base = baseUrlFrom(env);
-  if (hostedFrom(env)) add('agent-url', 'info', 'hosted build: explains and replays, no sign-in');
+  if (hostedFrom(env)) add('agent-url', 'info', 'hosted build: explains and shows an example run, no sign-in');
   else if (!base) add('agent-url', 'info', 'PAT_AGENT_BASE_URL is not set: the page works, but sign-in needs the agent URL PingFederate can reach');
   else add('agent-url', /^https:\/\//.test(base) ? 'pass' : 'fail', /^https:\/\//.test(base) ? `agent client_id will be ${base}/client.json` : 'PAT_AGENT_BASE_URL must be https');
 

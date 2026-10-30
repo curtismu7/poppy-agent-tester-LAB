@@ -1,0 +1,3 @@
+{
+  "cast": { "brand": "Fabrikam Bank", "agentName": "a budgeting assistant", "scope": "accounts:read", "host": "fabrikam" }
+}

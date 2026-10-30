@@ -19,16 +19,20 @@ import { decodeJws } from './jose.js';
 import { permitHost } from './netguard.js';
 import { newTrace, formatTraceparent } from './trace.js';
 import { DIAGRAM_NAMES, buildDiagram } from './diagramData.js';
+import { loadCast, verticalFrom, VERTICALS } from './cast.js';
+import { buildStory } from './story.js';
+import { buildSample } from './sample.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const WEB_DIST = process.env.WEB_DIST || path.resolve(HERE, '../../web/dist');
+const CONFIG = process.env.CUSTOMER_CONFIG || path.resolve(HERE, '../../customer.config.json');
 const MAX_BODY = 16 * 1024;
 const SCOPE_RE = /^[\x21\x23-\x5b\x5d-\x7e]+( [\x21\x23-\x5b\x5d-\x7e]+)*$/;
 
 const clip = (text) => (text.length > MAX_BODY ? `${text.slice(0, MAX_BODY)}\n... (cut at ${MAX_BODY} characters)` : text);
 const safePath = (p) => typeof p === 'string' && /^\/[A-Za-z0-9._~!$&'()*+,;=:@%/-]*$/.test(p) && !p.includes('//') && !p.split('/').includes('..');
 
-export function createApp({ agent, health = createHealth(), hosted = hostedFrom(), baseUrl = baseUrlFrom(), sessions = createSessions(), fetchImpl = (...a) => globalThis.fetch(...a) } = {}) {
+export function createApp({ configFile = CONFIG, agent, health = createHealth(), hosted = hostedFrom(), baseUrl = baseUrlFrom(), sessions = createSessions(), fetchImpl = (...a) => globalThis.fetch(...a) } = {}) {
   const app = express();
   app.disable('x-powered-by');
   app.use(hostCheck);
@@ -70,10 +74,14 @@ export function createApp({ agent, health = createHealth(), hosted = hostedFrom(
   api.use(express.json({ limit: '8kb' }));
   api.use('/health', health.router);
   api.get('/info', (_req, res) => { res.set('Cache-Control', 'no-store'); res.json({ hosted, simulated: hosted, agentClientId: baseUrl ? `${baseUrl}/client.json` : null, configured: !ready() }); });
+  // customer.config.json is read on every request so editing it shows up on reload (rule 12).
+  api.get('/story', (req, res) => { res.set('Cache-Control', 'no-store'); res.json({ ...buildStory(loadCast(configFile, verticalFrom(req.query.vertical))), verticals: Object.keys(VERTICALS) }); });
+  // An example run (invented values, real shape): what the hosted build shows instead of reaching a real Company.
+  api.get('/sample', (_req, res) => { res.set('Cache-Control', 'no-store'); res.json(buildSample()); });
   api.get('/diagram', (req, res) => { res.set('Cache-Control', 'no-store'); const name = DIAGRAM_NAMES.includes(req.query.name) ? req.query.name : DIAGRAM_NAMES[0]; res.json(buildDiagram(name)); });
 
   const live = (handler) => async (req, res) => {
-    if (hosted) return res.status(403).json({ error: 'hosted_simulation', message: 'This hosted build explains and replays. Run the standalone to reach a real Company and PingFederate.' });
+    if (hosted) return res.status(403).json({ error: 'hosted_simulation', message: 'This hosted build explains and shows an example run. Run the standalone to reach a real Company and PingFederate.' });
     if (ready()) return res.status(503).json({ error: ready() });
     const ws = workspaceFrom(req);
     if (!ws) return res.status(400).json({ error: 'bad_workspace' });

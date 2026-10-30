@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { getJson, postJson } from "../api";
 import Json from "./Json";
 
-const ERR = { issuer_mismatch: "The issuer you typed is not the one the Company publishes.", hosted_simulation: "This hosted build explains and replays; run the standalone to reach a real Company.", agent_not_configured: "Set PAT_AGENT_BASE_URL to the https URL PingFederate can reach, then restart.", discover_first: "Read the Company first.", sign_in_first: "Sign in first." };
+const ERR = { issuer_mismatch: "The issuer you typed is not the one the Company publishes.", hosted_simulation: "This hosted build explains and shows an example run; run the standalone to reach a real Company.", agent_not_configured: "Set PAT_AGENT_BASE_URL to the https URL PingFederate can reach, then restart.", discover_first: "Read the Company first.", sign_in_first: "Sign in first." };
 const say = (r) => ERR[r.body.error] || r.body.message || r.body.error || `HTTP ${r.status}`;
 
 function Step({ n, title, done, children }) {
@@ -23,6 +23,8 @@ export default function RunPanel({ info, resetSignal }) {
   const [busy, setBusy] = useState("");
   const [msg, setMsg] = useState("");
   const [last, setLast] = useState(null);
+  const [sample, setSample] = useState(null);
+  useEffect(() => { if (info?.hosted) getJson("/api/sample").then(setSample, () => setSample(null)); }, [info]);
 
   const refresh = useCallback(() => getJson("/api/state").then((s) => {
     setState(s);
@@ -57,7 +59,14 @@ export default function RunPanel({ info, resetSignal }) {
   const scopes = state?.discovery?.poppy?.auth?.scopes ? Object.keys(state.discovery.poppy.auth.scopes) : [];
   return (
     <div className="gate">
-      {hosted && <p className="panel panel--warn">This hosted build explains the flow and replays a recorded run. Run the standalone on your machine to reach a real Company and a real PingFederate.</p>}
+      {hosted && <p className="panel panel--warn">This hosted build explains the flow and shows an example run. Run the standalone on your machine to reach a real Company and a real PingFederate.</p>}
+      {hosted && sample && (
+        <section className="panel" aria-labelledby="example" data-testid="example-run">
+          <h2 id="example">Example run</h2>
+          <p className="muted">{sample.note}</p>
+          <Json value={sample.steps} label="Example run steps" />
+        </section>
+      )}
       {info && !info.configured && !hosted && <p className="panel panel--warn" data-testid="not-configured">Sign-in needs PAT_AGENT_BASE_URL (the https URL PingFederate can reach for this agent). Discovery still works.</p>}
       <p className="sr-only" role="status" aria-live="polite">{msg}</p>
       {msg && <p className="panel" data-testid="msg">{msg}</p>}

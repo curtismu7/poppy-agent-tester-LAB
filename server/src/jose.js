@@ -1,5 +1,5 @@
 // Compact JWS helpers for ES256 only. Zero dependencies. P-256 keys are built from createECDH, never from generateKeyPair
-// (generateKeyPair('ec') aborted on Node 20.20.2 in CI).
+// (the async and sync EC key generators aborted on Node 20.20.2 in CI).
 import crypto from 'node:crypto';
 
 export const b64url = (input) => Buffer.from(input).toString('base64url');

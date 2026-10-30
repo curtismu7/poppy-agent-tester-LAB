@@ -1,0 +1,26 @@
+# OrbStack:  HOST_PORT=5450 docker compose up --build -d   ->  http://127.0.0.1:5450
+# The server binds 0.0.0.0 INSIDE the container (PAT_BIND is the opt-in), but the port is published on loopback only.
+# Do not change the 127.0.0.1 below. HOST_PORT must stay in 5450-5499.
+name: poppy-agent-tester
+
+services:
+  poppy-agent-tester:
+    build: .
+    ports:
+      - "127.0.0.1:${HOST_PORT:-5450}:5450"
+    environment:
+      PORT: "5450"
+      PAT_BIND: 0.0.0.0
+      # The image defaults to MODE=mock (the hosted form). The local standalone is a live run, so compose says so.
+      MODE: live
+      PAT_AGENT_BASE_URL: ${PAT_AGENT_BASE_URL:-}
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:5450/api/health').then(r=>r.json()).then(j=>process.exit(j.schema==='demo-health/1'&&j.state==='ready'?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      start_period: 5s
+      start_interval: 2s
+      timeout: 5s
+      retries: 3

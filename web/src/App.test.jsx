@@ -10,6 +10,8 @@ function mockApi({ info = { hosted: false, configured: true, agentClientId: "htt
   globalThis.fetch = vi.fn((url, opts = {}) => {
     if (url === "/api/info") return info === "fail" ? Promise.reject(new Error("down")) : json(info);
     if (url === "/api/state") return json(state);
+    if (url.startsWith("/api/story")) return json({ verticals: ["banking", "retail"], cast: {}, talkTrack: [{ id: "say-first", title: "Say this first", say: "s" }, { id: "discover", title: "Discover", say: "d" }, { id: "signin", title: "Sign in", say: "i" }, { id: "call", title: "Call", say: "c" }, { id: "why", title: "Why two headers", say: "w" }] });
+    if (url === "/api/sample") return json({ note: "EXAMPLE run: invented", steps: [{ kind: "call" }] });
     if (url.startsWith("/api/diagram")) return json({ title: "t", intro: "i", nodes: [{ id: "a", label: "A", kind: "actor", x: 0, y: 0 }, { id: "b", label: "B", kind: "idp", x: 200, y: 0 }], steps: [{ from: "a", to: "b", label: "go", say: "x" }] });
     if (opts.method === "POST" && post[url]) return post[url];
     if (url === "/api/reset") return json({ ok: true });
@@ -85,7 +87,7 @@ describe("shell", () => {
     render(<App />);
     fireEvent.click(screen.getByRole("tab", { name: "Talk track" }));
     expect(window.location.hash).toBe("#talk");
-    expect(screen.getByText("Why two headers")).toBeInTheDocument();
+    expect(await screen.findByText("Why two headers")).toBeInTheDocument();
     fireEvent.keyDown(screen.getByRole("tab", { name: "Talk track" }), { key: "ArrowRight" });
     expect(screen.getByRole("tab", { name: "Run it" })).toHaveAttribute("aria-selected", "true");
   });

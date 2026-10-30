@@ -1,0 +1,17 @@
+{
+  "demos": [
+    {
+      "id": "poppy-agent-tester",
+      "name": "Poppy Agent Tester",
+      "kind": "Demo",
+      "description": "Play the personal agent from the Personal Agent Protocol (Poppy, Draft 0.3): read a Company's poppy.json, sign in to a real PingFederate with a URL as the client id and PKCE, then call the Company API with a signed Poppy-Session. Every request and token is shown raw.",
+      "url": "http://localhost:5450",
+      "healthPath": "/api/health",
+      "composeFile": "poppy-agent-tester/docker-compose.yml",
+      "composeOverlays": [],
+      "notes": "Host-run: ./scripts/run.sh (port 5450). Live local run needs a PingFederate with a CIMD policy for the agent URL (see docs/setup.md) and a Company that serves poppy.json. Docker: HOST_PORT=5450 docker compose up --build -d (published on 127.0.0.1 only). The hosted Mock card is the SE build (MODE=mock): it explains and shows an example run with invented values, and reaches nothing. The real mockUrl is set only in the shelf's local file, never in this repo (placeholder host here).",
+      "where": "both",
+      "mockUrl": "https://poppy-agent-tester.mock.example"
+    }
+  ]
+}

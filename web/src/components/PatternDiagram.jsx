@@ -28,16 +28,18 @@ const nodeTypes = { box: Box };
 // data.dy (up/down for left-right pairs, left/right for top-bottom pairs): two parallel arrows, two readable labels, nothing
 // looping out of the canvas.
 function LabelEdge({ id, sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, markerEnd, data }) {
+  // The ends move only a little (ENDPOINT_SHIFT) so the arrowheads stay on their boxes; the label takes the full offset.
   const horizontal = sourcePosition === Position.Left || sourcePosition === Position.Right;
-  const sx = sourceX + (horizontal ? 0 : data.dy); const sy = sourceY + (horizontal ? data.dy : 0);
-  const tx = targetX + (horizontal ? 0 : data.dy); const ty = targetY + (horizontal ? data.dy : 0);
+  const along = Math.max(-ENDPOINT_SHIFT, Math.min(ENDPOINT_SHIFT, data.dy));
+  const sx = sourceX + (horizontal ? 0 : along); const sy = sourceY + (horizontal ? along : 0);
+  const tx = targetX + (horizontal ? 0 : along); const ty = targetY + (horizontal ? along : 0);
   const [path, lx, ly] = getBezierPath({ sourceX: sx, sourceY: sy, targetX: tx, targetY: ty, sourcePosition, targetPosition });
   return (
     <>
       <BaseEdge id={id} path={path} markerEnd={markerEnd} />
       <EdgeLabelRenderer>
         <div className={`pat-elabel${data.now ? " pat-elabel--now" : ""}${data.dim ? " pat-elabel--dim" : ""}`} data-testid="edge-label"
-          style={{ transform: `translate(-50%, -50%) translate(${lx}px, ${ly}px)` }}>{data.text}</div>
+          style={{ transform: `translate(-50%, -50%) translate(${lx + (horizontal ? 0 : data.dy - along)}px, ${ly + (horizontal ? data.dy - along : 0)}px)` }}>{data.text}</div>
       </EdgeLabelRenderer>
     </>
   );
@@ -47,6 +49,7 @@ const edgeTypes = { label: LabelEdge };
 // Every step on the same pair of boxes (either direction) gets its own slot, spread evenly around the centre line, so a pair that
 // carries several requests and replies draws parallel arrows with separate labels (4 steps: -39, -13, +13, +39 px).
 const SLOT = 26;
+const ENDPOINT_SHIFT = 10; // px: how far an arrow end may move off its handle
 export function labelOffsets(steps) {
   const key = (s) => [s.from, s.to].sort().join('|');
   const total = new Map(); const seen = new Map();

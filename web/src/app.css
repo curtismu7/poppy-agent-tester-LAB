@@ -77,3 +77,10 @@ input:focus-visible { outline: 2px solid var(--th-focus); outline-offset: 2px; }
 ::placeholder { color: var(--th-placeholder); opacity: 1; }
 button:disabled { opacity: 0.6; cursor: not-allowed; } /* dimmer, but the border stays visible */
 .panel h2 .tag { margin-right: 4px; }
+
+/* Mode toggle: the pressed option is the mode the server runs in; the other is disabled with its reason on hover. */
+.mode-toggle { display: inline-flex; gap: 0; align-items: center; border: 1px solid var(--control-border); border-radius: var(--radius-pill); overflow: hidden; }
+.mode-toggle button { border: 0; border-radius: 0; padding: 3px 12px; background: var(--th-bg-inset); color: var(--text); font-size: var(--font-size-2xs); cursor: default; }
+.mode-toggle button[aria-pressed="true"] { background: var(--accent); color: var(--on-accent); font-weight: 700; }
+.mode-toggle button:disabled { opacity: 0.6; }
+.mode-toggle__note { padding: 0 10px; font-size: var(--font-size-2xs); color: var(--muted); }

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import RunPanel from "./components/RunPanel";
 import DiagramTab from "./components/DiagramTab";
 import { getJson, resetWorkspace } from "./api";
+import ModeToggle from "./components/ModeToggle.jsx";
 
 export const TABS = [
   { id: "run", label: "Run it" },
@@ -70,7 +71,6 @@ export default function App() {
 
   const hosted = info ? !!info.hosted : null;
   const banner = info === null ? BANNER_FAILED : hosted === true ? BANNER_HOSTED : hosted === false ? BANNER_LOCAL : BANNER_UNKNOWN;
-  const chip = info === null ? "Server not answering" : hosted === true ? "Hosted simulation" : hosted === false ? "Live (local)" : "Loading";
   return (
     <div className={`app${presenter ? " app--presenter" : ""}`}>
       <header>
@@ -81,7 +81,7 @@ export default function App() {
             {!presenter && <p className="intro">Play the personal agent from the Personal Agent Protocol: discover a Company, sign in with a URL as your client id, and call its API with a signed Poppy-Session.</p>}
           </div>
           <div className="head__tools">
-            <span className="chip" data-testid="mode">{chip}</span>
+            <ModeToggle hosted={hosted} />
             {!presenter && (
               <label className="inline">Vertical{" "}
                 <select value={vertical} onChange={(e) => setVertical(e.target.value)} data-testid="vertical">

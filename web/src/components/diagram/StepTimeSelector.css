@@ -1,8 +1,6 @@
-/* StepTimeSelector: step-time (playback dwell) dropdown. Tokens only; the border stays visible in both themes and when disabled.
+/* StepTimeSelector: step-time (playback dwell) dropdown. Layout only; the shared stylesheet gives the border.
  * Class names keep the .dc-steptime* prefix. */
 
 .dc-steptime { display: inline-flex; align-items: center; gap: 0.35rem; }
-.dc-steptime-label { font-size: 0.75rem; font-weight: 600; color: var(--th-text); white-space: nowrap; }
-.dc-steptime-select { font-size: 0.78rem; padding: 0.25rem 0.5rem; border-radius: var(--radius-md); border: 1px solid var(--control-border); background: var(--th-bg-card); color: var(--th-text); cursor: pointer; font-family: inherit; }
-.dc-steptime-select:focus-visible { outline: 2px solid var(--th-focus); outline-offset: 2px; }
-.dc-steptime-select:disabled { opacity: 0.6; cursor: not-allowed; }
+.dc-steptime-label { font-size: 0.75rem; font-weight: 600; color: var(--text); white-space: nowrap; }
+.dc-steptime-select { font-size: 0.78rem; padding: 0.25rem 0.5rem; cursor: pointer; }

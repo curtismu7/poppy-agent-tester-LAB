@@ -73,7 +73,7 @@ export function useDiagramStepper(total) {
 // One look for "activity" on every diagram: a thick dashed accent line whose dashes run along the
 // edge. Edges not reached yet are a fainter, thinner dashed line. CSS keyframes: DiagramStepBar.css.
 const NOW_STYLE = {
-  stroke: "var(--th-status-info)",
+  stroke: "var(--status-info)",
   strokeWidth: 5,
   strokeDasharray: "12 8",
   animation: "dstep-flow 0.9s linear infinite",

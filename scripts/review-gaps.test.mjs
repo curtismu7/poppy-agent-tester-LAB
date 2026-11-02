@@ -17,8 +17,8 @@ const ratio = (a, b) => { const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p);
 
 // The surfaces a control sits on, per theme, as the tokens define them.
 const THEMES = {
-  light: { page: '#f6f7f9', card: '#ffffff', inset: '#eff0f1', border: '#6b7a8c', focus: '#12538d', placeholder: '#5a6675', onAccent: '#ffffff', accent: '#b5231a' },
-  dark: { page: '#0b1220', card: '#131c2e', inset: '#1b2540', border: '#8b9ab0', focus: '#93c5fd', placeholder: '#a3b0c2', onAccent: '#0b1220', accent: '#ef6b61' },
+  light: { page: '#fcfcfc', card: '#ffffff', inset: '#eff0f1', border: '#556070', focus: '#12538d', placeholder: '#556070', onAccent: '#ffffff', accent: '#d20e0f' },
+  dark: { page: '#051727', card: '#172033', inset: '#0f2236', border: '#909ea4', focus: '#fcfcfc', placeholder: '#909ea4', onAccent: '#ffffff', accent: '#d20e0f' },
 };
 
 test('the control-border token is at least 3:1 on every surface, both themes (WCAG 1.4.11)', () => {
@@ -38,11 +38,11 @@ test('text on a filled accent is at least 4.5:1, both themes', () => {
   for (const [name, t] of Object.entries(THEMES)) assert.ok(ratio(t.onAccent, t.accent) >= 4.5, `${name} on accent`);
 });
 
-test('the tokens.css values are the ones this test checks (the light and dark blocks cannot drift apart unnoticed)', () => {
-  const css = read('web/src/tokens.css');
-  assert.match(css, new RegExp(`--control-border:\\s*${THEMES.light.border}`, 'i'));
-  assert.match(css, new RegExp(`--control-border:\\s*${THEMES.dark.border}`, 'i'));
-  assert.match(css, new RegExp(`--th-placeholder:\\s*${THEMES.dark.placeholder}`, 'i'));
+test('the shared standalone-ui.css values are the ones this test checks (the light and dark blocks cannot drift apart unnoticed)', () => {
+  const css = read('web/src/standalone-ui.css');
+  assert.match(css, new RegExp(`--border:\\s*${THEMES.light.border}`, 'i'));
+  assert.match(css, new RegExp(`--border:\\s*${THEMES.dark.border}`, 'i'));
+  assert.match(css, new RegExp(`--muted:\\s*${THEMES.dark.placeholder}`, 'i'));
 });
 
 test('the diagram control styles use tokens only: no hard-coded colour', () => {

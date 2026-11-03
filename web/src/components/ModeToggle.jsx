@@ -1,17 +1,18 @@
-// Shows which mode the server is running and offers the other one. The page cannot switch the server: a hosted build fails closed,
-// so Mock and Real are set by how the server was started. The unavailable option is disabled and says how to start it.
-const REAL_HOW = "Real needs the server started in live mode: leave MODE unset (or set MODE=live) and give it the Company and PingFederate settings. Restart the server to change modes.";
-const MOCK_HOW = "Mock is the hosted simulation. Restart the server with MODE set to anything other than live to switch to it.";
-
-export default function ModeToggle({ hosted }) {
-  const loading = hosted === undefined;
-  const failed = hosted === null;
-  const mock = hosted === true;
-  const real = hosted === false;
+// Rule 19: the Mock/Real switch. The server switches at runtime (POST /api/mode); this only asks.
+// Real is disabled with the how-to when the server reports realAvailable: false (a hosted build has no
+// Company or PingFederate settings, so it fails closed exactly as before).
+const REAL_HOW = "Real needs the Company and PingFederate settings (the agent key and the base URL). Give them to the server, then press Real.";
+export default function ModeToggle({ info, onChange }) {
+  const loading = info === undefined;
+  const failed = info === null;
+  const source = info?.source;
+  const mock = source === "mock";
+  const real = source === "real";
+  const realAvailable = info?.realAvailable === true;
   return (
     <div className="mode-toggle" role="group" aria-label="Mode" data-testid="mode">
-      <button type="button" aria-pressed={mock} disabled={loading || failed || real} title={real ? MOCK_HOW : undefined} data-testid="mode-mock">Mock</button>
-      <button type="button" aria-pressed={real} disabled={loading || failed || mock} title={mock ? REAL_HOW : undefined} data-testid="mode-real">Real</button>
+      <button type="button" aria-pressed={mock} disabled={loading || failed || mock} onClick={() => onChange?.("mock")} data-testid="mode-mock">Mock</button>
+      <button type="button" aria-pressed={real} disabled={loading || failed || real || !realAvailable} title={!realAvailable ? REAL_HOW : undefined} onClick={() => onChange?.("real")} data-testid="mode-real">Real</button>
       {failed && <span className="mode-toggle__note">Server not answering</span>}
       {loading && <span className="mode-toggle__note">Loading</span>}
     </div>

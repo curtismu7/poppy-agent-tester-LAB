@@ -81,7 +81,10 @@ export default function App() {
             {!presenter && <p className="intro">Play the personal agent from the Personal Agent Protocol: discover a Company, sign in with a URL as your client id, and call its API with a signed Poppy-Session.</p>}
           </div>
           <div className="head__tools">
-            <ModeToggle hosted={hosted} />
+            <ModeToggle info={info} onChange={async (source) => {
+        const res = await fetch("/api/mode", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ source }) }).catch(() => null);
+        if (res && res.ok) { const i = await getJson("/api/info").catch(() => null); setInfo(i); getJson(`/api/story?vertical=${encodeURIComponent(vertical)}`).then(setStory, () => setStory(null)); }
+      }} />
             {!presenter && (
               <label className="inline">Vertical{" "}
                 <select value={vertical} onChange={(e) => setVertical(e.target.value)} data-testid="vertical">

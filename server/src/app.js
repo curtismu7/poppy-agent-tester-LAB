@@ -36,6 +36,9 @@ const SCOPE_RE = /^[\x21\x23-\x5b\x5d-\x7e]+( [\x21\x23-\x5b\x5d-\x7e]+)*$/;
 const safePath = (p) => typeof p === 'string' && /^\/[A-Za-z0-9._~!$&'()*+,;=:@%/-]*$/.test(p) && !p.includes('//') && !p.split('/').includes('..');
 
 export function createApp({ configFile = CONFIG, agent, health = createHealth({ runtime: hostedFrom() ? 'offline' : 'live' }), hosted = hostedFrom(), baseUrl = baseUrlFrom(), sessions = createSessions(), fetchImpl = (...a) => globalThis.fetch(...a) } = {}) {
+  // Rule 19: the mode is a mutable holder so POST /api/mode can switch at runtime. Every gate below reads
+  // holder.hosted. A hosted build cannot switch to real: realAvailable is false there (no agent config), so it fails closed.
+  const holder = { hosted };
   const app = express();
   app.disable('x-powered-by');
   app.use(hostCheck);
@@ -47,6 +50,7 @@ export function createApp({ configFile = CONFIG, agent, health = createHealth({ 
   const reach = (...urls) => { for (const u of urls) permitHost(new URL(u).hostname); };
   const pendingByState = new Map(); // state -> workspace id, for the redirect that carries no header
   const ready = () => (agent && baseUrl ? null : 'agent_not_configured');
+  const realAvailable = () => Boolean(agent && baseUrl);
 
   // The agent's identity documents: public, GET only.
   app.get('/client.json', (_req, res) => { if (ready()) return res.status(503).json({ error: ready() }); res.set('Cache-Control', 'no-store'); return res.json(clientMetadata({ baseUrl, redirectUri: redirectUri() })); });
@@ -91,7 +95,22 @@ export function createApp({ configFile = CONFIG, agent, health = createHealth({ 
   // A malformed body is a 400 in JSON, never Express's HTML error page (which carries a stack trace outside production).
   api.use((err, _req, res, next) => { if (err) return res.status(err.status === 413 ? 413 : 400).json({ error: err.status === 413 ? 'body_too_large' : 'bad_json' }); return next(); });
   api.use('/health', health.router);
-  api.get('/info', (_req, res) => { res.set('Cache-Control', 'no-store'); res.json({ hosted, simulated: hosted, agentClientId: baseUrl ? `${baseUrl}/client.json` : null, configured: !ready() }); });
+  // Rule 19: runtime Mock/Real switch. Real requires the agent key and base URL (the Company + PingFederate settings);
+  // a hosted build has neither, so realAvailable is false there and the build fails closed as before.
+  api.post('/mode', express.json({ limit: '2kb' }), (req, res) => {
+    const b = req.body;
+    if (!b || typeof b !== 'object' || Array.isArray(b) || Object.keys(b).length !== 1 || !['mock', 'real'].includes(b.source)) {
+      return res.status(400).json({ error: 'bad_body', message: 'body must be exactly {"source": "mock" or "real"}' });
+    }
+    const wantHosted = b.source === 'mock';
+    if (!wantHosted && !realAvailable()) {
+      return res.status(409).json({ error: 'conflict', message: 'Real mode is not available: give the server the Company and PingFederate settings (agent key and base URL).' });
+    }
+    holder.hosted = wantHosted;
+    return res.json({ source: b.source });
+  });
+  api.get('/info', (_req, res) => { res.set('Cache-Control', 'no-store'); res.json({ hosted: holder.hosted, simulated: holder.hosted, agentClientId: baseUrl ? `${baseUrl}/client.json` : null, configured: !ready(),
+      source: holder.hosted ? 'mock' : 'real', realAvailable: realAvailable() }); });
   // customer.config.json is read on every request so editing it shows up on reload (rule 12).
   api.get('/story', (req, res) => { res.set('Cache-Control', 'no-store'); res.json({ ...buildStory(loadCast(configFile, verticalFrom(req.query.vertical))), verticals: Object.keys(VERTICALS) }); });
   // An example run (invented values, real shape): what the hosted build shows instead of reaching a real Company.
@@ -100,7 +119,7 @@ export function createApp({ configFile = CONFIG, agent, health = createHealth({ 
 
   // Discovery needs no agent identity; sign-in and calls do (needsAgent).
   const live = (handler, { needsAgent = true } = {}) => async (req, res) => {
-    if (hosted) return res.status(403).json({ error: 'hosted_simulation', message: 'This hosted build explains and shows an example run. Run the standalone to reach a real Company and PingFederate.' });
+    if (holder.hosted) return res.status(403).json({ error: 'hosted_simulation', message: 'This hosted build explains and shows an example run. Run the standalone to reach a real Company and PingFederate.' });
     if (needsAgent && ready()) return res.status(503).json({ error: ready() });
     const ws = workspaceFrom(req);
     if (!ws) return res.status(400).json({ error: 'bad_workspace' });

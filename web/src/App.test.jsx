@@ -6,7 +6,7 @@ const json = (body, status = 200) => Promise.resolve({ ok: status < 400, status,
 const STATE = { workspace: "w", config: null, discovery: null, signedIn: false, token: null, steps: [] };
 const DISCOVERED = { ...STATE, config: { origin: "https://company.example", issuer: "https://pf.example", scope: "accounts:read" }, discovery: { ok: true, checks: [{ id: "resource", ok: true, note: "resource matches" }], poppy: { auth: { scopes: { "accounts:read": "Read" } } } } };
 
-function mockApi({ info = { hosted: false, configured: true, agentClientId: "https://agent.example/client.json" }, state = STATE, post = {} } = {}) {
+function mockApi({ info = { hosted: false, configured: true, agentClientId: "https://agent.example/client.json", source: "real", realAvailable: true }, state = STATE, post = {} } = {}) {
   globalThis.fetch = vi.fn((url, opts = {}) => {
     if (url === "/api/info") return info === "fail" ? Promise.reject(new Error("down")) : json(info);
     if (url === "/api/state") return json(state);

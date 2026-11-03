@@ -413,3 +413,27 @@ test('a typed host\'s permit is renewed when the sign-in reaches the token endpo
     clearPermitted();
   }
 });
+
+test('rule 19: POST /api/mode switches mock↔real at runtime; exact body; 409 without settings; hosted gates follow the holder', async () => {
+  const live = createApp({ agent: agentKey, baseUrl: `http://127.0.0.1:${agentPort}`, sessions: createSessions(), health: createHealth({ runChecks: async () => [], intervalMs: 3_600_000 }) });
+  const s = await listen(live);
+  try {
+    const o = originOf(s);
+    const modePost = (body) => fetch(`${o}/api/mode`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+    const info = async () => (await (await fetch(`${o}/api/info`)).json());
+    const bad = await modePost({ source: 'sideways' }); assert.equal(bad.status, 400);
+    const extra = await modePost({ source: 'mock', extra: 1 }); assert.equal(extra.status, 400);
+    const toReal = await modePost({ source: 'real' }); assert.equal(toReal.status, 200);
+    assert.equal((await info()).source, 'real'); assert.equal((await info()).hosted, false); assert.equal((await info()).simulated, false);
+    const toMock = await modePost({ source: 'mock' }); assert.equal(toMock.status, 200);
+    assert.equal((await info()).source, 'mock'); assert.equal((await info()).simulated, true);
+  } finally { s.close(); }
+  // Hosted build: no agent, no base URL → Real is 409 and the build stays hosted (fails closed).
+  const hosted = createApp({ agent: null, hosted: true, baseUrl: '', health: createHealth({ runChecks: async () => [], intervalMs: 3_600_000 }) });
+  const hs = await listen(hosted);
+  try {
+    const refused = await fetch(`${originOf(hs)}/api/mode`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ source: 'real' }) });
+    assert.equal(refused.status, 409);
+    assert.equal((await (await fetch(`${originOf(hs)}/api/info`)).json()).hosted, true);
+  } finally { hs.close(); }
+});

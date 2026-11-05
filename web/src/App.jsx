@@ -3,6 +3,7 @@ import RunPanel from "./components/RunPanel";
 import DiagramTab from "./components/DiagramTab";
 import { getJson, resetWorkspace } from "./api";
 import ModeToggle from "./components/ModeToggle.jsx";
+import ShelfLink from "./components/ShelfLink.jsx";
 
 export const TABS = [
   { id: "run", label: "Run it" },
@@ -81,6 +82,7 @@ export default function App() {
             {!presenter && <p className="intro">Play the personal agent from the Personal Agent Protocol: discover a Company, sign in with a URL as your client id, and call its API with a signed Poppy-Session.</p>}
           </div>
           <div className="head__tools">
+            <ShelfLink />
             <ModeToggle info={info} onChange={async (source) => {
         const res = await fetch("/api/mode", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ source }) }).catch(() => null);
         if (res && res.ok) { const i = await getJson("/api/info").catch(() => null); setInfo(i); getJson(`/api/story?vertical=${encodeURIComponent(vertical)}`).then(setStory, () => setStory(null)); }

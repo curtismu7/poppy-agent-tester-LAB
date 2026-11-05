@@ -23,6 +23,7 @@ import { DIAGRAM_NAMES, buildDiagram } from './diagramData.js';
 import { loadCast, verticalFrom, VERTICALS } from './cast.js';
 import { buildStory } from './story.js';
 import { buildSample } from './sample.js';
+import { shelfInfo } from './shelfLink.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const WEB_DIST = process.env.WEB_DIST || path.resolve(HERE, '../../web/dist');
@@ -233,6 +234,7 @@ export function createApp({ configFile = CONFIG, agent, health = createHealth({ 
   app.use('/api', (_req, res) => res.status(404).json({ error: 'not_found' }));
 
   if (fs.existsSync(WEB_DIST)) {
+app.get('/api/shelf', (_req, res) => { res.set('Cache-Control', 'no-store'); res.json(shelfInfo()); }); // the header "Shelf" button
     app.use(express.static(WEB_DIST, { index: false, maxAge: 0 }));
     app.get(/^\/(?!api\/).*/, (_req, res) => res.sendFile(path.join(WEB_DIST, 'index.html')));
   }

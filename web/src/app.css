@@ -72,3 +72,6 @@ input { width: 100%; display: block; margin: 4px 0 8px; }
 .mode-toggle button[aria-pressed="true"] { background: var(--accent); color: var(--on-accent); font-weight: 700; }
 .mode-toggle button:disabled { opacity: 0.6; }
 .mode-toggle__note { padding: 0 10px; font-size: var(--font-size-2xs); color: var(--muted); }
+
+.shell-theme { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; color: var(--text); }
+.shell-theme select { min-height: 32px; padding: 4px 8px; }

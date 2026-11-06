@@ -434,6 +434,10 @@ test('rule 19: POST /api/mode switches mock↔real at runtime; exact body; 409 w
   try {
     const refused = await fetch(`${originOf(hs)}/api/mode`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ source: 'real' }) });
     assert.equal(refused.status, 409);
-    assert.equal((await (await fetch(`${originOf(hs)}/api/info`)).json()).hosted, true);
+    assert.match((await refused.json()).message, /Real mode is not available/);
+    const hinfo = await (await fetch(`${originOf(hs)}/api/info`)).json();
+    assert.equal(hinfo.hosted, true);
+    assert.equal(hinfo.realAvailable, false);
+    assert.match(hinfo.realReason, /Real mode is not available/);
   } finally { hs.close(); }
 });

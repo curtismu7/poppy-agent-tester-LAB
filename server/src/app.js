@@ -111,7 +111,8 @@ export function createApp({ configFile = CONFIG, agent, health = createHealth({ 
     return res.json({ source: b.source });
   });
   api.get('/info', (_req, res) => { res.set('Cache-Control', 'no-store'); res.json({ hosted: holder.hosted, simulated: holder.hosted, agentClientId: baseUrl ? `${baseUrl}/client.json` : null, configured: !ready(),
-      source: holder.hosted ? 'mock' : 'real', realAvailable: realAvailable() }); });
+      source: holder.hosted ? 'mock' : 'real', realAvailable: realAvailable(),
+      realReason: realAvailable() ? null : 'Real mode is not available: give the server the Company and PingFederate settings (agent key and base URL).' }); });
   // customer.config.json is read on every request so editing it shows up on reload (rule 12).
   api.get('/story', (req, res) => { res.set('Cache-Control', 'no-store'); res.json({ ...buildStory(loadCast(configFile, verticalFrom(req.query.vertical))), verticals: Object.keys(VERTICALS) }); });
   // An example run (invented values, real shape): what the hosted build shows instead of reaching a real Company.

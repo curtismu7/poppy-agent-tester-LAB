@@ -9,7 +9,7 @@ services:
     ports:
       - "127.0.0.1:${HOST_PORT:-5450}:5450"
     environment:
-      SHELF_URL: ${SHELF_URL:-}
+      SHELF_URL: ${SHELF_URL:-http://127.0.0.1:4400}
       PORT: "5450"
       PAT_BIND: 0.0.0.0
       # The image defaults to MODE=mock (the hosted form). The local standalone is a live run, so compose says so.

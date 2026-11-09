@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import { installNetguard } from './netguard.js';
 import { createApp, startHttpServer } from './app.js';
 import { allPassed, runChecks } from './doctor.js';
-import { assertBindAllowed, bindHost, resolvePort } from './safety.js';
+import { assertBindAllowed, bindHost, labProxyHosts, resolvePort } from './safety.js';
 import { hostedFrom, baseUrlFrom } from './config.js';
 import { loadAgentKey } from './agentKey.js';
 
@@ -22,8 +22,10 @@ const host = assertBindAllowed(bindHost(), process.env);
 const dataDir = process.env.PAT_DATA_DIR || path.resolve(fileURLToPath(new URL('../../.data', import.meta.url)));
 const hosted = hostedFrom(process.env);
 console.log(`[poppy-agent-tester] MODE=${process.env.MODE || 'live'}${hosted ? ' (hosted: explains and shows an example run, reaches nothing)' : ' (live: reaches only the hosts you type)'}`);
-const app = createApp({ agent: hosted ? null : loadAgentKey(dataDir), hosted, baseUrl: baseUrlFrom() });
 const port = resolvePort();
+// LAB_ALLOWED_HOSTS (the family lab-proxy's name for this lab) is parsed before the server starts.
+const proxyHosts = labProxyHosts(process.env, port);
+const app = createApp({ agent: hosted ? null : loadAgentKey(dataDir), hosted, baseUrl: baseUrlFrom(), proxyHosts });
 if (process.env.PAT_TLS_CERT && process.env.PAT_TLS_KEY) {
   // PingFederate fetches the agent's client metadata over https, so the agent URL needs a certificate PF trusts.
   const server = https.createServer({ cert: fs.readFileSync(process.env.PAT_TLS_CERT), key: fs.readFileSync(process.env.PAT_TLS_KEY) }, app);

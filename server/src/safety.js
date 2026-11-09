@@ -69,34 +69,58 @@ export function cleanText(value, max = 80) {
 // Everything else (the API, the page) is loopback-only, so reaching the public name never gives anyone the app.
 export const PUBLIC_PATHS = new Set(['/client.json', '/jwks.json', '/cb']);
 
-export function hostCheck(req, res, next) {
-  const raw = String(req.headers.host || '');
-  const host = raw.startsWith('[') ? raw.slice(0, raw.indexOf(']') + 1) : raw.replace(/:\d+$/, '');
-  if (isLoopbackHost(host)) return next();
-  // PAT_AGENT_HOST is the agent's own public name (what PingFederate fetches client.json from); nothing else is accepted.
-  const agentHost = String(process.env.PAT_AGENT_HOST || '').toLowerCase().replace(/:\d+$/, '');
-  if (agentHost === '' || host.toLowerCase() !== agentHost) return res.status(403).json({ error: 'bad_host', message: 'Host must be a loopback name' });
-  const path = String(req.originalUrl || req.url || '').split('?')[0];
-  if (req.method !== 'GET' || !PUBLIC_PATHS.has(path)) return res.status(403).json({ error: 'public_host_scope', message: 'The public agent name serves only /client.json, /jwks.json and /cb' });
-  return next();
+// The family lab-proxy (https://local.ping-devops.com:8443) sends Host `<name>:<this lab's port>` for a name listed in
+// LAB_ALLOWED_HOSTS (a comma list of host names, no ports). Loopback always works; unset means loopback only. index.js
+// parses it before the server starts and passes the set to createApp.
+export function labProxyHosts(env = process.env, port = resolvePort(env)) {
+  return new Set(String(env.LAB_ALLOWED_HOSTS || '').split(',').map((s) => s.trim().toLowerCase()).filter(Boolean).map((n) => `${n}:${port}`));
 }
 
-const WRITE = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
-export function sameOriginWrites(req, res, next) {
-  if (!WRITE.has(req.method)) return next();
-  const site = req.headers['sec-fetch-site'];
-  if (site && site !== 'same-origin' && site !== 'none') return res.status(403).json({ error: 'cross_origin', message: 'writes must be same-origin' });
-  const origin = req.headers.origin;
-  if (origin) {
-    let ok = false;
-    // Behind the SE ingress the Host header is rewritten to loopback (the app only accepts loopback names), so the page's
-    // own public host, set by the deploy as PAT_PUBLIC_HOST, is the other same-origin value. Nothing else is.
-    const publicHost = String(process.env.PAT_PUBLIC_HOST || '').toLowerCase();
-    try {
-      const host = new URL(origin).host.toLowerCase();
-      ok = host === String(req.headers.host || '').toLowerCase() || (publicHost !== '' && host === publicHost);
-    } catch { /* malformed */ }
-    if (!ok) return res.status(403).json({ error: 'cross_origin', message: 'writes must be same-origin' });
-  }
-  next();
+// Behind the lab-proxy the browser's Origin is the proxy's (https://local.ping-devops.com:8443) while Host is this lab's own
+// name. X-Forwarded-Host/-Proto are believed only when Host is one of proxyHosts (never loopback), so a request that did not
+// come through the proxy cannot use them.
+export function isProxiedSameOrigin(headers, proxyHosts) {
+  const xfh = String(headers['x-forwarded-host'] || '').trim().toLowerCase();
+  const xfp = String(headers['x-forwarded-proto'] || '').trim().toLowerCase();
+  return proxyHosts.has(String(headers.host || '').toLowerCase()) && xfh !== '' && (xfp === 'https' || xfp === 'http')
+    && headers.origin === `${xfp}://${xfh}`;
 }
+
+export function makeHostCheck(proxyHosts = new Set()) {
+  return function hostCheck(req, res, next) {
+    const raw = String(req.headers.host || '');
+    const host = raw.startsWith('[') ? raw.slice(0, raw.indexOf(']') + 1) : raw.replace(/:\d+$/, '');
+    if (isLoopbackHost(host)) return next();
+    if (proxyHosts.has(raw.toLowerCase())) return next(); // the family lab-proxy's name for this lab (LAB_ALLOWED_HOSTS)
+    // PAT_AGENT_HOST is the agent's own public name (what PingFederate fetches client.json from); nothing else is accepted.
+    const agentHost = String(process.env.PAT_AGENT_HOST || '').toLowerCase().replace(/:\d+$/, '');
+    if (agentHost === '' || host.toLowerCase() !== agentHost) return res.status(403).json({ error: 'bad_host', message: 'Host must be a loopback name' });
+    const path = String(req.originalUrl || req.url || '').split('?')[0];
+    if (req.method !== 'GET' || !PUBLIC_PATHS.has(path)) return res.status(403).json({ error: 'public_host_scope', message: 'The public agent name serves only /client.json, /jwks.json and /cb' });
+    return next();
+  };
+}
+export const hostCheck = makeHostCheck();
+
+const WRITE = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
+export function makeSameOriginWrites(proxyHosts = new Set()) {
+  return function sameOriginWrites(req, res, next) {
+    if (!WRITE.has(req.method)) return next();
+    const site = req.headers['sec-fetch-site'];
+    if (site && site !== 'same-origin' && site !== 'none') return res.status(403).json({ error: 'cross_origin', message: 'writes must be same-origin' });
+    const origin = req.headers.origin;
+    if (origin) {
+      let ok = false;
+      // Behind the SE ingress the Host header is rewritten to loopback (the app only accepts loopback names), so the page's
+      // own public host, set by the deploy as PAT_PUBLIC_HOST, is the other same-origin value. Nothing else is.
+      const publicHost = String(process.env.PAT_PUBLIC_HOST || '').toLowerCase();
+      try {
+        const host = new URL(origin).host.toLowerCase();
+        ok = host === String(req.headers.host || '').toLowerCase() || (publicHost !== '' && host === publicHost);
+      } catch { /* malformed */ }
+      if (!ok && !isProxiedSameOrigin(req.headers, proxyHosts)) return res.status(403).json({ error: 'cross_origin', message: 'writes must be same-origin' });
+    }
+    next();
+  };
+}
+export const sameOriginWrites = makeSameOriginWrites();

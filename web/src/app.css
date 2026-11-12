@@ -1,6 +1,7 @@
 code { font-size: var(--font-size-2xs); }
 .app { max-width: min(96vw, 2000px); margin: 0 auto; padding: 0 0 32px; }
-.head { display: flex; gap: 16px; justify-content: space-between; align-items: flex-start; padding: 16px 0 8px; flex-wrap: wrap; }
+.head { display: flex; gap: 16px; justify-content: space-between; align-items: flex-start; padding: 16px 0 8px; flex-wrap: wrap; position: relative; }
+html { font-size: var(--fs, 16px); }
 .head h1 { margin: 0 0 4px; font-size: var(--font-size-xl); }
 .intro { margin: 0; max-width: 70ch; color: var(--muted); font-size: var(--font-size-sm); line-height: 1.45; }
 .head__tools { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }

@@ -1,9 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import fs from "node:fs";
 import RunPanel from "./components/RunPanel";
 import DiagramTab from "./components/DiagramTab";
 import { getJson, resetWorkspace } from "./api";
-import ModeToggle from "./components/ModeToggle.jsx";
 import ShelfLink from "./components/ShelfLink.jsx";
+import TopMenu, { applyFontSize } from "./top-menu/TopMenu.jsx";
+
+const VERSION = (() => { try { return JSON.parse(fs.readFileSync(new URL("../../package.json", import.meta.url), "utf8")).version || null; } catch { return null; } })();
 
 export const TABS = [
   { id: "run", label: "Run it" },
@@ -19,7 +22,6 @@ const BANNER_HOSTED = "HOSTED SIMULATION: this build explains the flow and shows
 const hashTab = () => { const h = window.location.hash.replace("#", ""); return TABS.some((t) => t.id === h) ? h : "run"; };
 
 const THEME_KEY = "poppy.theme";
-const THEMES = [["auto", "Auto"], ["light", "Light"], ["dark", "Dark"]];
 function initialTheme() {
   try { const t = localStorage.getItem(THEME_KEY); if (t === "light" || t === "dark") return t; } catch { /* storage blocked */ }
   return "auto";
@@ -34,6 +36,8 @@ export default function App() {
   const [resetSignal, setResetSignal] = useState(0);
   const [resetMsg, setResetMsg] = useState("");
   const [theme, setTheme] = useState(initialTheme);
+  const [fontStep, setFontStep] = useState(() => { try { const f = localStorage.getItem("poppy.font"); return ["S", "M", "L"].includes(f) ? f : "M"; } catch { return "M"; } });
+  useEffect(() => { applyFontSize(fontStep); try { localStorage.setItem("poppy.font", fontStep); } catch { /* storage blocked */ } }, [fontStep]);
   const tabsRef = useRef(null);
 
   useEffect(() => { if (theme === "auto") delete document.documentElement.dataset.theme; else document.documentElement.dataset.theme = theme; }, [theme]);
@@ -97,25 +101,22 @@ export default function App() {
             {!presenter && <p className="intro">Play the personal agent from the Personal Agent Protocol: discover a Company, sign in with a URL as your client id, and call its API with a signed Poppy-Session.</p>}
           </div>
           <div className="head__tools">
-            <ShelfLink />
-            <ModeToggle info={info} onChange={async (source) => {
+            <TopMenu
+              mode={{ value: info?.source === "real" ? "real" : "mock", onChange: async (source) => {
         const res = await fetch("/api/mode", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ source }) }).catch(() => null);
         if (res && res.ok) { const i = await getJson("/api/info").catch(() => null); setInfo(i); getJson(`/api/story?vertical=${encodeURIComponent(vertical)}`).then(setStory, () => setStory(null)); }
-      }} />
-            {!presenter && (
-              <label className="inline">Vertical{" "}
-                <select value={vertical} onChange={(e) => setVertical(e.target.value)} data-testid="vertical">
-                  {(story ? story.verticals : ["banking"]).map((v) => <option key={v} value={v}>{v}</option>)}
-                </select>
-              </label>
-            )}
-            <label className="shell-theme">Theme
-              <select value={theme} onChange={(e) => pickTheme(e.target.value)}>
-                {THEMES.map(([id, label]) => <option key={id} value={id}>{label}</option>)}
-              </select>
-            </label>
-            <button type="button" onClick={reset} data-testid="reset">Reset</button>
-            <button type="button" aria-pressed={presenter} onClick={() => setPresenter((v) => !v)} data-testid="presenter">{presenter ? "Exit presenter (Esc)" : "Presenter (P)"}</button>
+      }, realAvailable: info ? info.realAvailable === true : false, realHint: info?.realReason }}
+              vertical={{ value: vertical, onChange: setVertical, options: story ? story.verticals : ["banking"] }}
+              theme={{ value: theme, onChange: pickTheme }}
+              fontSize={{ value: fontStep, onChange: setFontStep }}
+              present={{ active: presenter, onToggle: () => setPresenter((v) => !v), label: "Presenter (P)" }}
+              shelfUrl="https://local.ping-devops.com:8443/"
+              help={{ href: "https://github.com/curtismu7/poppy-agent-tester-LAB#readme" }}
+              version={VERSION}
+              onReset={reset}
+            >
+              <ShelfLink />
+            </TopMenu>
           </div>
         </div>
       </header>

@@ -41,7 +41,7 @@ describe("banner", () => {
     mockApi({ info: "fail" });
     render(<App />);
     await waitFor(() => expect(screen.getByTestId("banner").textContent).toBe(BANNER_FAILED));
-    expect(screen.getByTestId("mode").textContent).toContain("Server not answering");
+    expect(screen.getByTestId("mode-select").querySelector('option[value="real"]').disabled).toBe(true); // offers no action while the server is unreachable
     fireEvent.change(screen.getByLabelText("Company origin"), { target: { value: "https://company.example" } });
     fireEvent.change(screen.getByLabelText(/PingFederate issuer/), { target: { value: "https://pf.example" } });
     expect(screen.getByTestId("discover")).toBeDisabled();
@@ -60,7 +60,7 @@ describe("run it", () => {
   it("needs both typed origins before Read the Company is enabled, and shows the checks after", async () => {
     mockApi({ post: { "/api/discover": json({ ok: true, checks: [], poppy: { auth: { scopes: { "accounts:read": "Read" } } } }) } });
     render(<App />);
-    await waitFor(() => expect(screen.getByTestId("mode-real").getAttribute("aria-pressed")).toBe("true"));
+    await waitFor(() => expect(screen.getByTestId("mode-select")).toHaveValue("real"));
     expect(screen.getByTestId("discover")).toBeDisabled();
     fireEvent.change(screen.getByLabelText('Company origin'), { target: { value: "https://company.example" } });
     fireEvent.change(screen.getByLabelText(/PingFederate issuer/), { target: { value: "https://pf.example" } });
@@ -71,7 +71,7 @@ describe("run it", () => {
   it("shows the issuer the Company really publishes, and the checks, when the issuer does not match", async () => {
     mockApi({ post: { "/api/discover": json({ error: "issuer_mismatch", message: "The Company publishes issuer https://real-issuer.example, not the one you typed (https://other.example).", published: "https://real-issuer.example", discovery: { ok: false, checks: [{ id: "domain", ok: false, note: "organization.domain x must equal the host y" }] } }, 400) } });
     render(<App />);
-    await waitFor(() => expect(screen.getByTestId("mode-real").getAttribute("aria-pressed")).toBe("true"));
+    await waitFor(() => expect(screen.getByTestId("mode-select")).toHaveValue("real"));
     fireEvent.change(screen.getByLabelText('Company origin'), { target: { value: "https://company.example" } });
     fireEvent.change(screen.getByLabelText(/PingFederate issuer/), { target: { value: "https://other.example" } });
     fireEvent.click(screen.getByTestId("discover"));
@@ -88,7 +88,7 @@ describe("run it", () => {
   it("names the Company and issuer when one cannot be reached", async () => {
     mockApi({ post: { "/api/discover": json({ error: "upstream", message: "fetch failed" }, 502) } });
     render(<App />);
-    await waitFor(() => expect(screen.getByTestId("mode-real").getAttribute("aria-pressed")).toBe("true"));
+    await waitFor(() => expect(screen.getByTestId("mode-select")).toHaveValue("real"));
     fireEvent.change(screen.getByLabelText("Company origin"), { target: { value: "https://company.example" } });
     fireEvent.change(screen.getByLabelText(/PingFederate issuer/), { target: { value: "https://pf.example" } });
     fireEvent.click(screen.getByTestId("discover"));

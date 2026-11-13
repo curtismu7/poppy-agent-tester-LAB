@@ -214,7 +214,8 @@ export function createApp({ configFile = CONFIG, agent, health = createHealth({ 
     const session = signSession({ delegation, delegatedKey: rec.delegated, clientId, issuer: rec.config.issuerClaim, sid: rec.sid, sub, method: 'GET', url, accessToken: rec.token.access_token });
     const trace = newTrace(req.headers.traceparent);
     const tp = formatTraceparent(trace.traceId, trace.span());
-    const headers = { authorization: `Bearer ${rec.token.access_token}`, 'poppy-session': session, traceparent: tp, accept: 'application/json' };
+    const callUrl = new URL(url);
+    const headers = { authorization: `Bearer ${rec.token.access_token}`, 'poppy-session': session, traceparent: tp, accept: 'application/json', 'x-forwarded-host': callUrl.host, 'x-forwarded-proto': callUrl.protocol.replace(':', '') };
     reach(url);
     const r = await fetchImpl(url, { method: 'GET', headers, redirect: 'manual', signal: AbortSignal.timeout(10000) });
     const text = await readClipped(r, MAX_BODY);

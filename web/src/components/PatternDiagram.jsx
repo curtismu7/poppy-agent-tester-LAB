@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Background, BackgroundVariant, BaseEdge, Controls, EdgeLabelRenderer, getBezierPath, Handle, MarkerType, Position, ReactFlow, ReactFlowProvider } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import DiagramStepBar from "./DiagramStepBar";
-import { useDiagramStepper } from "../hooks/useDiagramStepper";
+import { markEdges, useDiagramStepper } from "../hooks/useDiagramStepper";
 import { REFIT_EVENT, useFitOnResize } from "../hooks/useFitOnResize";
 import "./PatternDiagram.css";
 
@@ -66,28 +66,29 @@ function sides(a, b) {
   return Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? ["r", "l"] : ["l", "r"]) : (dy > 0 ? ["b", "t"] : ["t", "b"]);
 }
 
-function Canvas({ pattern, positions, onMove, stepper }) {
+function Canvas({ pattern, positions, onMove, stepper, activeEdge = null }) {
   const ref = useRef(null);
   useFitOnResize(ref, FIT);
-  const active = stepper.step >= 0 ? pattern.steps[stepper.step] : null;
+  const active = stepper && stepper.step >= 0 ? pattern.steps[stepper.step] : null;
   const nodes = pattern.nodes.map((n) => ({
     id: n.id, type: "box", position: positions[n.id], draggable: true,
     data: { label: n.label, kind: n.kind, on: !!active && (active.from === n.id || active.to === n.id) },
   }));
   const offs = labelOffsets(pattern.steps);
-  const edges = pattern.steps.map((s, i) => {
+  const pageDriven = activeEdge !== null && activeEdge >= 0;
+  const edges = markEdges(pattern.steps.map((s, i) => {
     // Each arrow leaves the side facing its target; a reply uses the same pair of sides as its request, shifted by labelOffsets.
     const [a, b] = sides(positions[s.from], positions[s.to]);
     const cp = s.to === "rule";
-    const now = stepper.step === i;
-    const seen = stepper.step >= 0 && i <= stepper.step;
+    const now = stepper ? stepper.step === i : false;
+    const seen = stepper && stepper.step >= 0 && i <= stepper.step;
     return {
       id: `e${i}`, source: s.from, target: s.to, sourceHandle: `s-${a}`, targetHandle: `t-${b}`, type: "label",
-      animated: now, data: { text: `${i + 1}. ${s.label}`, dy: offs[i], now, dim: stepper.step >= 0 && !seen },
-      className: `pat-edge${cp ? " pat-edge--cp" : ""}${now ? " pat-edge--now" : ""}${stepper.step >= 0 && !seen ? " pat-edge--dim" : ""}`,
+      animated: now, data: { text: `${i + 1}. ${s.label}`, dy: offs[i], now, dim: stepper && stepper.step >= 0 && !seen },
+      className: `pat-edge${cp ? " pat-edge--cp" : ""}${now ? " pat-edge--now" : ""}${stepper && stepper.step >= 0 && !seen ? " pat-edge--dim" : ""}`,
       markerEnd: { type: MarkerType.ArrowClosed },
     };
-  });
+  }), pageDriven ? [activeEdge] : []);
   return (
     <div ref={ref} className="pat-canvas" data-testid="pattern-canvas">
       <ReactFlow nodes={nodes} edges={edges} nodeTypes={nodeTypes} edgeTypes={edgeTypes} fitView fitViewOptions={FIT} nodesConnectable={false} minZoom={0.3}
@@ -99,11 +100,12 @@ function Canvas({ pattern, positions, onMove, stepper }) {
   );
 }
 
-export default function PatternDiagram({ pattern, resetSignal = 0 }) {
+export default function PatternDiagram({ pattern, resetSignal = 0, activeEdge = null }) {
   const initial = useMemo(() => Object.fromEntries(pattern.nodes.map((n) => [n.id, { x: n.x, y: n.y }])), [pattern]);
   const [positions, setPositions] = useState(initial);
   const stepper = useDiagramStepper(pattern.steps.length);
   const onMove = useCallback((id, p) => setPositions((cur) => ({ ...cur, [id]: { x: p.x, y: p.y } })), []);
+  const pageDriven = activeEdge !== null && activeEdge >= 0; // a page (e.g. the chat) drives the highlight itself
   const step = stepper.step >= 0 ? pattern.steps[stepper.step] : null;
   // Reset restores box positions as well as the walkthrough and the view. The page-level Reset raises resetSignal.
   const reset = useCallback(() => { stepper.stop(); setPositions(initial); setTimeout(() => window.dispatchEvent(new Event(REFIT_EVENT)), 0); }, [stepper.stop, initial]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -114,6 +116,12 @@ export default function PatternDiagram({ pattern, resetSignal = 0 }) {
       <h2 className="pat__title">{pattern.title}</h2>
       <p className="intro">{pattern.intro}</p>
       <DiagramStepBar stepper={stepper} caption={step ? step.label : ""} testId="pattern-step-bar" />
+      {pageDriven && activeEdge < pattern.steps.length && (
+        <article className="track__now" data-testid="pattern-page-now">
+          <h3>Arrow {activeEdge + 1}: {pattern.steps[activeEdge].label}</h3>
+          <p>{pattern.steps[activeEdge].say}</p>
+        </article>
+      )}
       <button type="button" className="pat-reset" onClick={reset} data-testid="pattern-reset">Reset positions and walkthrough</button>
       {step && (
         <article className="track__now" data-testid="pattern-now">
@@ -122,7 +130,7 @@ export default function PatternDiagram({ pattern, resetSignal = 0 }) {
         </article>
       )}
       <ReactFlowProvider>
-        <Canvas pattern={pattern} positions={positions} onMove={onMove} stepper={stepper} />
+        <Canvas pattern={pattern} positions={positions} onMove={onMove} stepper={pageDriven ? null : stepper} activeEdge={pageDriven ? activeEdge : null} />
       </ReactFlowProvider>
       <p className="keys">Drag any box. Moved: {Object.keys(positions).filter((k) => positions[k].x !== initial[k].x || positions[k].y !== initial[k].y).length} box(es).</p>
     </section>

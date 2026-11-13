@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import fs from "node:fs";
 import RunPanel from "./components/RunPanel";
+import AtlasChat from "./components/AtlasChat";
 import DiagramTab from "./components/DiagramTab";
 import { getJson, resetWorkspace } from "./api";
 import ShelfLink from "./components/ShelfLink.jsx";
@@ -10,6 +11,7 @@ const VERSION = (() => { try { return JSON.parse(fs.readFileSync(new URL("../../
 
 export const TABS = [
   { id: "run", label: "Run it" },
+  { id: "chat", label: "Chat with the agent" },
   { id: "diagram", label: "Diagram" },
   { id: "talk", label: "Talk track" },
 ];
@@ -135,6 +137,7 @@ export default function App() {
             </aside>
           )}
           {tab === "run" && <RunPanel info={info} resetSignal={resetSignal} />}
+          {tab === "chat" && <AtlasChat info={info} resetSignal={resetSignal} />}
           {tab === "diagram" && <DiagramTab resetSignal={resetSignal} />}
           {tab === "talk" && (
             <div className="talk">{TALK.map((t) => <section key={t.id}><h2>{t.title}</h2><p>{t.say}</p></section>)}</div>

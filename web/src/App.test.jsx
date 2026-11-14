@@ -171,3 +171,26 @@ describe("shell", () => {
     expect(screen.getAllByRole("button", { name: /reset/i }).length).toBeGreaterThanOrEqual(2); // the page's and the diagram's
   });
 });
+
+describe("one-click defaults", () => {
+  it("pre-fills the Company origin and issuer from /api/info defaults so the visitor can 1-click run", async () => {
+    const withDefaults = { hosted: false, configured: true, agentClientId: "https://agent.example/client.json", source: "real", realAvailable: true, defaults: { origin: "https://company.example", issuer: "https://pf.example:9031", scope: "accounts:read" } };
+    mockApi({
+      info: withDefaults,
+      post: {
+        "/api/discover": json({ ok: true, checks: [], poppy: { auth: { scopes: { "accounts:read": "Read" } } } }),
+        "/api/authorize": json({ url: "https://pf.example:9031/as/authorization.oauth2?client_id=x" }),
+      },
+    });
+    render(<App />);
+    await waitFor(() => expect(screen.getByTestId("mode-select")).toHaveValue("real"));
+    // the form is pre-filled from the deployment's defaults
+    expect(screen.getByLabelText("Company origin").value).toBe("https://company.example");
+    expect(screen.getByLabelText(/PingFederate issuer/).value).toBe("https://pf.example:9031");
+    // one click: discover then authorize, and the browser is sent to PingFederate
+    delete window.location;
+    window.location = { assign: vi.fn() };
+    fireEvent.click(screen.getByTestId("one-click"));
+    await waitFor(() => expect(window.location.assign).toHaveBeenCalledWith(expect.stringContaining("/as/authorization.oauth2")));
+  });
+});

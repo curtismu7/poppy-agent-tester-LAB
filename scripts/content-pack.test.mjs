@@ -17,11 +17,11 @@ test('the committed content-pack.json is exactly what the builder makes (no drif
 
 test('every story has a card that opens a real tab', () => {
   const pack = buildPack();
-  assert.equal(pack.stories.length, 6);
+  assert.equal(pack.stories.length, 11);
   for (const s of pack.stories) {
     const card = pack.cards.find((c) => c.story === s.id);
     assert.ok(card, s.id);
-    assert.match(card.action.href, /^\/#(run|diagram)$/);
+    assert.match(card.action.href, /^\/#(run|diagram|why)$/);
   }
 });
 

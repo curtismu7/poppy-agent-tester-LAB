@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 import express from 'express';
 import { isLoopbackHost, makeHostCheck, makeSameOriginWrites } from './safety.js';
 import { createHealth } from './health.js';
-import { hostedFrom, baseUrlFrom } from './config.js';
+import { hostedFrom, baseUrlFrom, demoDefaultsFrom } from './config.js';
 import { createSessions } from './sessions.js';
 import { workspaceFrom } from './workspaces.js';
 import { discover, parseOrigin, fetchIssuerMetadata, DiscoverError } from './discover.js';
@@ -112,7 +112,8 @@ export function createApp({ configFile = CONFIG, agent, health = createHealth({ 
   });
   api.get('/info', (_req, res) => { res.set('Cache-Control', 'no-store'); res.json({ hosted: holder.hosted, simulated: holder.hosted, agentClientId: baseUrl ? `${baseUrl}/client.json` : null, configured: !ready(),
       source: holder.hosted ? 'mock' : 'real', realAvailable: realAvailable(),
-      realReason: realAvailable() ? null : 'Real mode is not available: give the server the Company and PingFederate settings (agent key and base URL).' }); });
+      realReason: realAvailable() ? null : 'Real mode is not available: give the server the Company and PingFederate settings (agent key and base URL).',
+      defaults: demoDefaultsFrom() }); });
   // customer.config.json is read on every request so editing it shows up on reload (rule 12).
   api.get('/story', (req, res) => { res.set('Cache-Control', 'no-store'); res.json({ ...buildStory(loadCast(configFile, verticalFrom(req.query.vertical))), verticals: Object.keys(VERTICALS) }); });
   // An example run (invented values, real shape): what the hosted build shows instead of reaching a real Company.
@@ -214,7 +215,8 @@ export function createApp({ configFile = CONFIG, agent, health = createHealth({ 
     const session = signSession({ delegation, delegatedKey: rec.delegated, clientId, issuer: rec.config.issuerClaim, sid: rec.sid, sub, method: 'GET', url, accessToken: rec.token.access_token });
     const trace = newTrace(req.headers.traceparent);
     const tp = formatTraceparent(trace.traceId, trace.span());
-    const headers = { authorization: `Bearer ${rec.token.access_token}`, 'poppy-session': session, traceparent: tp, accept: 'application/json' };
+    const callUrl = new URL(url);
+    const headers = { authorization: `Bearer ${rec.token.access_token}`, 'poppy-session': session, traceparent: tp, accept: 'application/json', 'x-forwarded-host': callUrl.host, 'x-forwarded-proto': callUrl.protocol.replace(':', '') };
     reach(url);
     const r = await fetchImpl(url, { method: 'GET', headers, redirect: 'manual', signal: AbortSignal.timeout(10000) });
     const text = await readClipped(r, MAX_BODY);

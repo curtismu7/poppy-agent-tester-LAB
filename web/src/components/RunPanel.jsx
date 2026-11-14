@@ -32,7 +32,11 @@ export default function RunPanel({ info, resetSignal }) {
   const refresh = useCallback(() => getJson("/api/state").then((s) => {
     setState(s);
     if (s.config) { setOrigin((v) => v || s.config.origin); setIssuer((v) => v || s.config.issuer); setScope((v) => v || s.config.scope); }
-  }, () => setState(null)), []);
+    else if (info?.defaults?.origin) {
+      // One-click defaults (owner rule 2026-11-14): the deployment names its own Company and issuer.
+      setOrigin((v) => v || info.defaults.origin); setIssuer((v) => v || info.defaults.issuer); if (info.defaults.scope) setScope((v) => v || info.defaults.scope);
+    }
+  }, () => setState(null)), [info]);
   useEffect(() => { refresh(); }, [refresh, resetSignal]);
   useEffect(() => {
     const q = new URLSearchParams(window.location.search).get("signin");
@@ -54,6 +58,17 @@ export default function RunPanel({ info, resetSignal }) {
     if (!r.ok) return setMsg(say(r));
     window.location.assign(r.body.url);
   });
+  const oneClick = () => run("one-click", async () => {
+    const r = await postJson("/api/discover", { origin, issuer });
+    if (!r.ok) { setMismatch(r.body.discovery?.checks ?? null); return setMsg(r.status === 502 ? `Could not reach the Company or the issuer: ${r.body.message}. Check ${origin} and ${issuer}.` : say(r)); }
+    const offered = Object.keys(r.body.poppy?.auth?.scopes ?? {});
+    const chosen = offered.includes("accounts:read") ? "accounts:read" : offered[0] ?? "";
+    if (chosen) setScope(chosen);
+    const a = await postJson("/api/authorize", { scope: chosen });
+    if (!a.ok) return setMsg((r.body.ok ? "The Company's documents pass every check. " : "The Company's documents have problems; see the checks. ") + say(a));
+    window.location.assign(a.body.url);
+  });
+
   const call = () => run("call", async () => {
     const r = await postJson("/api/call", { path });
     if (!r.ok) return setMsg(say(r));
@@ -77,6 +92,8 @@ export default function RunPanel({ info, resetSignal }) {
       {info && !info.configured && !hosted && <p className="panel panel--warn" data-testid="not-configured">Sign-in and calls need PAT_AGENT_BASE_URL (the https URL PingFederate can reach for this agent). Reading the Company works without it.</p>}
       <p className="sr-only" role="status" aria-live="polite">{msg}</p>
       {msg && <p className="panel" data-testid="msg">{msg}</p>}
+
+      <p><button type="button" onClick={oneClick} disabled={off || busy !== ""} data-testid="one-click" style={{ fontWeight: 700 }}>Run it (1 click)</button>{' '}<span className="muted">fills in this deployment's Company and issuer, reads the Company, then hands you to PingFederate to sign in.</span></p>
 
       <Step n={1} title="Read the Company" done={Boolean(state?.discovery)}>
         <label htmlFor="origin">Company origin</label>

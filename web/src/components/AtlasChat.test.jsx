@@ -75,17 +75,19 @@ describe("AtlasChat", () => {
 
   it("offers the call chip once signed in and shows the raw step detail on click", async () => {
     const token = "T".repeat(8);
-    mockApi({
-      state: {
-        ...STATE, signedIn: true,
-        config: { origin: "https://company.example", issuer: "https://pf.example", scope: "accounts:read" },
-        discovery: { ok: true, checks: [], poppy: { auth: { scopes: { "accounts:read": "Read" } } } },
-        token: { access_token: token, claims: { sub: "person-1" } },
-        steps: [{ kind: "discover", request: { urls: ["u"] }, response: { checks: [] } }],
-      },
-      post: {
-        "/api/call": json({ kind: "call", request: { method: "GET", url: "https://company.example/poppy/api/v1/me" }, response: { status: 200, body: { user_id: "person-1", session_id: "sid", scopes: ["accounts:read"] } } }),
-      },
+    const callStep = { kind: "call", request: { method: "GET", url: "https://company.example/poppy/api/v1/me" }, response: { status: 200, body: { user_id: "person-1", session_id: "sid", scopes: ["accounts:read"] } } };
+    let state = {
+      ...STATE, signedIn: true,
+      config: { origin: "https://company.example", issuer: "https://pf.example", scope: "accounts:read" },
+      discovery: { ok: true, checks: [], poppy: { auth: { scopes: { "accounts:read": "Read" } } } },
+      token: { access_token: token, claims: { sub: "person-1" } },
+      steps: [{ kind: "discover", request: { urls: ["u"] }, response: { checks: [] } }],
+    };
+    globalThis.fetch = vi.fn((url, opts = {}) => {
+      if (url === "/api/diagram?name=poppy-flow") return json(DIAGRAM);
+      if (url === "/api/state") return json(state);
+      if (opts.method === "POST" && url === "/api/call") { state = { ...state, steps: [...state.steps, callStep] }; return json(callStep); }
+      return json({ error: "nope" }, 404);
     });
     render(<AtlasChat info={INFO} resetSignal={0} />);
     const chip = await screen.findByTestId("atlas-chip-0");

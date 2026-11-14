@@ -20,7 +20,10 @@ export function parseOrigin(text) {
 }
 
 export async function getJson(url, fetchImpl = fetch) {
-  const res = await fetchImpl(url, { redirect: 'manual', signal: AbortSignal.timeout(TIMEOUT_MS), headers: { accept: 'application/json' } });
+  // undici always sends Host from the URL, so a Company behind a name-based vhost (the demo BFF is one) sees the wrong
+  // host. X-Forwarded-Host names the Company the visitor typed; every Poppy Company that serves by Host honours it.
+  const u = new URL(url);
+  const res = await fetchImpl(url, { redirect: 'manual', signal: AbortSignal.timeout(TIMEOUT_MS), headers: { accept: 'application/json', 'x-forwarded-host': u.host, 'x-forwarded-proto': u.protocol.replace(':', '') } });
   if (res.status >= 300 && res.status < 400) throw new DiscoverError('redirect', `${url} redirected; redirects are not followed`);
   if (!res.ok) throw new DiscoverError('http', `${url} answered ${res.status}`);
   let text;

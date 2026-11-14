@@ -4,7 +4,6 @@ import RunPanel from "./components/RunPanel";
 import AtlasChat from "./components/AtlasChat";
 import DiagramTab from "./components/DiagramTab";
 import { getJson, resetWorkspace } from "./api";
-import ShelfLink from "./components/ShelfLink.jsx";
 import TopMenu, { applyFontSize } from "./top-menu/TopMenu.jsx";
 
 const VERSION = (() => { try { return JSON.parse(fs.readFileSync(new URL("../../package.json", import.meta.url), "utf8")).version || null; } catch { return null; } })();
@@ -13,6 +12,7 @@ export const TABS = [
   { id: "run", label: "Run it" },
   { id: "chat", label: "Chat with the agent" },
   { id: "diagram", label: "Diagram" },
+  { id: "why", label: "Why Poppy" },
   { id: "talk", label: "Talk track" },
 ];
 // Never blank and never claims "not hosted" before it knows: until /api/info answers (or if it fails) it says both.
@@ -117,7 +117,6 @@ export default function App() {
               version={VERSION}
               onReset={reset}
             >
-              <ShelfLink />
             </TopMenu>
           </div>
         </div>
@@ -133,12 +132,17 @@ export default function App() {
         <div id={`panel-${tab}`} role="tabpanel" aria-labelledby={`tab-${tab}`}>
           {presenter && tab !== "talk" && (
             <aside className="presenter-say" data-testid="presenter-say" aria-label="Talk track">
-              {TALK.filter((t) => (tab === "run" ? ["say-first", "discover", "signin", "call"] : ["say-first", "why"]).includes(t.id)).map((t) => <p key={t.id}><strong>{t.title}.</strong> {t.say}</p>)}
+              {TALK.filter((t) => (tab === "run" ? ["say-first", "discover", "signin", "call"] : tab === "chat" ? ["say-first", "why-poppy"] : tab === "why" ? ["why-poppy", "value-company", "value-developer", "value-person", "value-ping"] : ["say-first", "why"]).includes(t.id)).map((t) => <p key={t.id}><strong>{t.title}.</strong> {t.say}</p>)}
             </aside>
           )}
           {tab === "run" && <RunPanel info={info} resetSignal={resetSignal} />}
           {tab === "chat" && <AtlasChat info={info} resetSignal={resetSignal} />}
           {tab === "diagram" && <DiagramTab resetSignal={resetSignal} />}
+          {tab === "why" && (
+            <div className="talk" data-testid="why-poppy">
+              {TALK.filter((t) => ["why-poppy", "value-company", "value-developer", "value-person", "value-ping"].includes(t.id)).map((t) => <section key={t.id}><h2>{t.title}</h2><p>{t.say}</p></section>)}
+            </div>
+          )}
           {tab === "talk" && (
             <div className="talk">{TALK.map((t) => <section key={t.id}><h2>{t.title}</h2><p>{t.say}</p></section>)}</div>
           )}

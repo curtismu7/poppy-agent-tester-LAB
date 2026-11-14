@@ -7,10 +7,12 @@ services:
   poppy-agent-tester:
     build: .
     ports:
-      - "127.0.0.1:${HOST_PORT:-5450}:5450"
+      - "127.0.0.1:${HOST_PORT:-5450}:5451"
+      - "127.0.0.1:5451:5451"
+      - "127.0.0.1:5451:5451"
     environment:
       SHELF_URL: ${SHELF_URL:-http://127.0.0.1:4400}
-      PORT: "5450"
+      PORT: "5451"
       # The name the family lab-proxy (https://local.ping-devops.com:8443) sends in Host; loopback is always accepted.
       LAB_ALLOWED_HOSTS: ${LAB_ALLOWED_HOSTS:-poppy-agent-tester.local.ping-devops.com}
       PAT_BIND: 0.0.0.0
@@ -18,18 +20,65 @@ services:
       MODE: live
       PAT_DATA_DIR: /data
       PAT_AGENT_BASE_URL: ${PAT_AGENT_BASE_URL:-}
+      PAT_AGENT_HOST: ${PAT_AGENT_HOST:-}
+      PAT_TLS_CERT: ${PAT_TLS_CERT:-}
+      PAT_TLS_KEY: ${PAT_TLS_KEY:-}
+      # One-click defaults for the Run it form (empty = the visitor types their own; shipped text stays .example).
+      PAT_DEMO_COMPANY_ORIGIN: ${PAT_DEMO_COMPANY_ORIGIN:-}
+      PAT_DEMO_PF_ISSUER: ${PAT_DEMO_PF_ISSUER:-}
+      PAT_DEMO_SCOPE: ${PAT_DEMO_SCOPE:-}
+      NODE_EXTRA_CA_CERTS: /data/ca.pem
     read_only: true
     volumes:
       - agent-data:/data
+      - ${PAT_TLS_CERT_DIR:-/dev/null}:/certs:ro
+    networks:
+      - default
+      - ai-demo
     cap_drop: [ALL]
     security_opt: ["no-new-privileges:true"]
     healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:5450/api/health').then(r=>r.json()).then(j=>process.exit(j.schema==='demo-health/1'&&j.state==='ready'?0:1)).catch(()=>process.exit(1))"]
+      test: ["CMD", "node", "-e", "const h=(u)=>fetch(u).then(r=>r.json()).then(j=>j.schema==='demo-health/1'&&j.state==='ready').catch(()=>false); Promise.all([h('http://127.0.0.1:5450/api/health'),h('https://127.0.0.1:5451/api/health')]).then(([a,b])=>process.exit(a||b?0:1)).catch(()=>process.exit(1))"]
       interval: 30s
       start_period: 5s
       start_interval: 2s
       timeout: 5s
       retries: 3
+
+  issuer-shim:
+    image: node:22-alpine
+    user: node
+    command: ["node", "/shim/metadata-shim.mjs"]
+    volumes:
+      - ./deploy/issuer-shim:/shim:ro
+    environment:
+      SHIM_UPSTREAM: https://ai-demo-pingfederate:9031
+      SHIM_PROTECTED_RESOURCE: ${PAT_DEMO_COMPANY_ORIGIN:-https://localhost:3001}
+      SHIM_CERT: /shim/cert.pem
+      SHIM_KEY: /shim/key.pem
+      SHIM_BIND: 0.0.0.0
+    networks:
+      ai-demo:
+        aliases: [local.ping-devops.com]
+
+  company-shim:
+    image: node:22-alpine
+    user: node
+    command: ["node", "/shim/pass-tls.mjs"]
+    volumes:
+      - ./deploy/issuer-shim:/shim:ro
+    environment:
+      LISTEN_PORT: 3001
+      UPSTREAM_HOST: ai-demo-api-server
+      UPSTREAM_PORT: "3001"
+      SHIM_CERT: /shim/cert-localhost.pem
+      SHIM_KEY: /shim/key-localhost.pem
+    network_mode: "service:poppy-agent-tester"
+
+networks:
+  ai-demo:
+    external: true
+    name: ai-demo_ai-demo
 
 volumes:
   agent-data:

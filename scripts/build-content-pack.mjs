@@ -12,8 +12,8 @@ const { version } = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 
 export function buildPack() {
   const story = buildStory(DEFAULT_CAST);
   const sid = (n) => `S${String(n).padStart(2, '0')}`;
-  const terms = { 'say-first': ['cimd'], discover: ['poppy-json'], signin: ['cimd', 'private-key-jwt'], call: ['poppy-session', 'delegation'], why: ['poppy-session'], unverified: ['poppy-json'] };
-  const tab = { 'say-first': 'run', discover: 'run', signin: 'run', call: 'run', why: 'diagram', unverified: 'run' };
+  const terms = { 'say-first': ['cimd'], discover: ['poppy-json'], signin: ['cimd', 'private-key-jwt'], call: ['poppy-session', 'delegation'], why: ['poppy-session'], unverified: ['poppy-json'], 'why-poppy': ['poppy-json'], 'value-company': ['poppy-json'], 'value-developer': ['cimd'], 'value-person': ['poppy-session'], 'value-ping': ['private-key-jwt'] };
+  const tab = { 'say-first': 'run', discover: 'run', signin: 'run', call: 'run', why: 'diagram', unverified: 'run', 'why-poppy': 'why', 'value-company': 'why', 'value-developer': 'why', 'value-person': 'why', 'value-ping': 'why' };
   return {
     schema: 'demo-content-pack/1',
     id: 'poppy-agent-tester',

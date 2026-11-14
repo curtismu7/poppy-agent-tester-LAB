@@ -143,6 +143,76 @@
       "story": "S05"
     },
     {
+      "id": "step-why-poppy",
+      "label": "Why Poppy exists",
+      "description": "Today a Company faces two choices for an agent at its door: block it, or let it sign in as the person and do anything they can. Blocking loses the customer who wants their agent to help; full impersonation means the Company cannot tell an agent from a person, cannot limit what it does, and gets bots clicking through pages built for people. Both sides waste effort: Companies build agent detection, agents build evasion. Poppy replaces that fight with a door both sides agree on.",
+      "group": "try-it",
+      "action": {
+        "type": "route",
+        "href": "/#why"
+      },
+      "terms": [
+        "poppy-json"
+      ],
+      "story": "S06"
+    },
+    {
+      "id": "step-value-company",
+      "label": "What the Company gains",
+      "description": "Fabrikam Bank publishes one poppy.json and any agent can work with it — no per-agent integration, no client registration desk. The Company decides which scopes an agent may request (accounts:read read, writes only with the person present), which sign-ins count, and which agents are on the allow-list. Every agent visit is identified, scoped and auditable: it can see agent traffic as agent traffic across its APIs, website and company agent, instead of mistaking it for a human or losing it to a block. And because the spec builds on OAuth and HTTPS the Company already runs, adopting it changes no existing system for people.",
+      "group": "try-it",
+      "action": {
+        "type": "route",
+        "href": "/#why"
+      },
+      "terms": [
+        "poppy-json"
+      ],
+      "story": "S07"
+    },
+    {
+      "id": "step-value-developer",
+      "label": "What the agent developer gains",
+      "description": "One protocol instead of one integration per Company: discover poppy.json, sign in, call — the same three steps everywhere, so the second Company and the fiftieth work the same way. The person never hands the agent a password; they sign in on the Company's own page and grant a scope, which makes consent real and revocable. The agent identifies itself honestly with a URL it controls (CIMD) and signs what it sends, so it is never pretending to be a person and never needs to evade detection. And it gets efficient access — APIs and structured conversations instead of clicking through a website.",
+      "group": "try-it",
+      "action": {
+        "type": "route",
+        "href": "/#why"
+      },
+      "terms": [
+        "cimd"
+      ],
+      "story": "S08"
+    },
+    {
+      "id": "step-value-person",
+      "label": "What the person gains",
+      "description": "Their agent gets more done, at every Company that takes part, without being handed their credentials. They choose what the agent may see and do — read accounts:read yes, move money only with them present — and they can revoke it. The Company knows exactly which agent acted and on whose behalf, so if something goes wrong there is a record instead of a mystery.",
+      "group": "try-it",
+      "action": {
+        "type": "route",
+        "href": "/#why"
+      },
+      "terms": [
+        "poppy-session"
+      ],
+      "story": "S09"
+    },
+    {
+      "id": "step-value-ping",
+      "label": "Where Ping lands",
+      "description": "Every step of this flow runs through identity infrastructure: PingFederate resolves the agent URL (CIMD), signs the person in, issues the token with the agent URL as client_id, and publishes the metadata the Company verifies against. The Poppy-Session is verified with the same JWKS machinery. In other words, Poppy is a new kind of traffic arriving at the front door you already own — and the demos in this family show Ping making that door work for agents without a separate stack.",
+      "group": "try-it",
+      "action": {
+        "type": "route",
+        "href": "/#why"
+      },
+      "terms": [
+        "private-key-jwt"
+      ],
+      "story": "S10"
+    },
+    {
       "id": "step-unverified",
       "label": "What we have not shown",
       "description": "The issuer metadata does not yet list protected_resources, which the spec asks for. We found no PingFederate setting for it. UNVERIFIED: that every Poppy client will accept PingFederate's metadata without it.",
@@ -154,7 +224,7 @@
       "terms": [
         "poppy-json"
       ],
-      "story": "S06"
+      "story": "S11"
     },
     {
       "id": "ref-doctor",
@@ -195,6 +265,31 @@
     },
     {
       "id": "S06",
+      "title": "Why Poppy exists",
+      "say": "Today a Company faces two choices for an agent at its door: block it, or let it sign in as the person and do anything they can. Blocking loses the customer who wants their agent to help; full impersonation means the Company cannot tell an agent from a person, cannot limit what it does, and gets bots clicking through pages built for people. Both sides waste effort: Companies build agent detection, agents build evasion. Poppy replaces that fight with a door both sides agree on."
+    },
+    {
+      "id": "S07",
+      "title": "What the Company gains",
+      "say": "Fabrikam Bank publishes one poppy.json and any agent can work with it — no per-agent integration, no client registration desk. The Company decides which scopes an agent may request (accounts:read read, writes only with the person present), which sign-ins count, and which agents are on the allow-list. Every agent visit is identified, scoped and auditable: it can see agent traffic as agent traffic across its APIs, website and company agent, instead of mistaking it for a human or losing it to a block. And because the spec builds on OAuth and HTTPS the Company already runs, adopting it changes no existing system for people."
+    },
+    {
+      "id": "S08",
+      "title": "What the agent developer gains",
+      "say": "One protocol instead of one integration per Company: discover poppy.json, sign in, call — the same three steps everywhere, so the second Company and the fiftieth work the same way. The person never hands the agent a password; they sign in on the Company's own page and grant a scope, which makes consent real and revocable. The agent identifies itself honestly with a URL it controls (CIMD) and signs what it sends, so it is never pretending to be a person and never needs to evade detection. And it gets efficient access — APIs and structured conversations instead of clicking through a website."
+    },
+    {
+      "id": "S09",
+      "title": "What the person gains",
+      "say": "Their agent gets more done, at every Company that takes part, without being handed their credentials. They choose what the agent may see and do — read accounts:read yes, move money only with them present — and they can revoke it. The Company knows exactly which agent acted and on whose behalf, so if something goes wrong there is a record instead of a mystery."
+    },
+    {
+      "id": "S10",
+      "title": "Where Ping lands",
+      "say": "Every step of this flow runs through identity infrastructure: PingFederate resolves the agent URL (CIMD), signs the person in, issues the token with the agent URL as client_id, and publishes the metadata the Company verifies against. The Poppy-Session is verified with the same JWKS machinery. In other words, Poppy is a new kind of traffic arriving at the front door you already own — and the demos in this family show Ping making that door work for agents without a separate stack."
+    },
+    {
+      "id": "S11",
       "title": "What we have not shown",
       "say": "The issuer metadata does not yet list protected_resources, which the spec asks for. We found no PingFederate setting for it. UNVERIFIED: that every Poppy client will accept PingFederate's metadata without it."
     }

@@ -34,16 +34,19 @@ test('the parser flags an unbound or wildcard publish', () => {
   }
 });
 
-test('compose default host port and Dockerfile port are allowed ports and agree', () => {
+test('compose default host port and container port are allowed ports and agree', () => {
   const compose = here('docker-compose.yml');
   const host = Number(/\$\{HOST_PORT:-(\d+)\}/.exec(compose)[1]);
   assert.equal(portProblem(host), null);
-  const docker = here('Dockerfile');
-  const port = Number(/^EXPOSE (\d+)/m.exec(docker)[1]);
-  assert.equal(portProblem(port), null);
-  assert.match(compose, new RegExp(`:${port}"`));
-  assert.match(docker, /^ENV PAT_BIND=0\.0\.0\.0$/m);
-  assert.match(docker, /^USER node$/m);
+  // The server serves the API page and the public TLS identity on ONE container port
+  // (PAT_TLS_CERT set => https). The agent URL names 5451, so the container port is 5451,
+  // published on loopback host ports 5450 (page via the family port) and 5451 (the agent URL).
+  const container = Number(/:\d+:(\d+)"/.exec(compose)[1]);
+  assert.equal(portProblem(container), null);
+  assert.equal(container, 5451);
+  assert.match(compose, /"127\.0\.0\.1:5451:5451"/);
+  assert.match(compose, /NODE_EXTRA_CA_CERTS/);
+  assert.match(here('Dockerfile'), /^USER node$/m);
 });
 
 test('the container is locked down: read-only fs, no capabilities, no new privileges', () => {

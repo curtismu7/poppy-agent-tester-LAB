@@ -28,6 +28,7 @@ services:
       PAT_DEMO_PF_ISSUER: ${PAT_DEMO_PF_ISSUER:-}
       PAT_DEMO_P1_ISSUER: ${PAT_DEMO_P1_ISSUER:-}
       PAT_DEMO_SCOPE: ${PAT_DEMO_SCOPE:-}
+      PAT_DEMO_LOGIN_HINT: ${PAT_DEMO_LOGIN_HINT:-}
       # Optional live Claude agent behind the Agent chat tab (empty = guided script). Never returned or logged.
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       PAT_CHAT_MODEL: ${PAT_CHAT_MODEL:-}

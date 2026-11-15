@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 import express from 'express';
 import { isLoopbackHost, isProxiedSameOrigin, makeHostCheck, makeSameOriginWrites } from './safety.js';
 import { createHealth } from './health.js';
-import { hostedFrom, baseUrlFrom, demoDefaultsFrom } from './config.js';
+import { hostedFrom, baseUrlFrom, demoDefaultsFrom, loginHintFrom } from './config.js';
 import { createSessions } from './sessions.js';
 import { workspaceFrom } from './workspaces.js';
 import { discover, parseOrigin, fetchIssuerMetadata, DiscoverError, SUPPORTED_VERSION } from './discover.js';
@@ -214,12 +214,13 @@ export function createApp({ configFile = CONFIG, agent, health = createHealth({ 
     if (pendingByState.size > 1000) pendingByState.delete(pendingByState.keys().next().value);
     const clientId = `${baseUrl}/client.json`;
     const resource = useResource ? rec.config.resource : undefined;
+    const loginHint = loginHintFrom() || undefined;
     let url;
     let pushed = false;
     if (rec.config.parEndpoint) {
       // RFC 9126 (spec 4.2: SHOULD whenever the issuer lists the endpoint): push the parameters with the client assertion, then
       // open the authorization endpoint with only client_id and the request_uri. A refusal is shown, never quietly downgraded.
-      const par = parRequest({ parEndpoint: rec.config.parEndpoint, clientId, issuer: rec.config.issuerClaim, kid: agent.kid, signingKey: agent.privateKey, redirectUri: redirectUri(), scope, state, challenge: pkce.challenge, resource });
+      const par = parRequest({ parEndpoint: rec.config.parEndpoint, clientId, issuer: rec.config.issuerClaim, kid: agent.kid, signingKey: agent.privateKey, redirectUri: redirectUri(), scope, state, challenge: pkce.challenge, resource, loginHint });
       reach(par.url);
       const r = await fetchImpl(par.url, { method: 'POST', headers: par.headers, body: par.body, redirect: 'manual', signal: AbortSignal.timeout(10000) });
       const text = await readClipped(r, MAX_BODY);
@@ -232,7 +233,7 @@ export function createApp({ configFile = CONFIG, agent, health = createHealth({ 
       url = parAuthorizationUrl({ authorizationEndpoint: rec.config.authorizationEndpoint, clientId, requestUri: body.request_uri });
       pushed = true;
     } else {
-      url = authorizationUrl({ authorizationEndpoint: rec.config.authorizationEndpoint, clientId, redirectUri: redirectUri(), scope, state, challenge: pkce.challenge, resource });
+      url = authorizationUrl({ authorizationEndpoint: rec.config.authorizationEndpoint, clientId, redirectUri: redirectUri(), scope, state, challenge: pkce.challenge, resource, loginHint });
     }
     sessions.log(ws, { kind: 'authorize', request: { url } });
     return res.json({ url, clientId, par: pushed });

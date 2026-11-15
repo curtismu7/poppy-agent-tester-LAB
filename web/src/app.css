@@ -106,3 +106,8 @@ input { width: 100%; display: block; margin: 4px 0 8px; }
 .atlas-arrow--in { color: var(--muted); }
 .atlas-step__result { color: var(--muted); font-size: var(--font-size-2xs); white-space: nowrap; }
 .atlas-step__spec { color: var(--muted); font-size: var(--font-size-2xs); white-space: nowrap; }
+.atlas-company { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 6px 8px; margin: 0; padding: 10px 12px; border: none; border-top: 1px solid var(--border); }
+.atlas-company legend { float: left; grid-column: 1 / -1; padding: 0; margin-bottom: 4px; font-size: var(--font-size-2xs); font-weight: 600; }
+.atlas-company label { font-size: var(--font-size-2xs); }
+.atlas-company input { min-width: 0; font-size: var(--font-size-2xs); }
+@media (max-width: 480px) { .atlas-company { grid-template-columns: 1fr; } }

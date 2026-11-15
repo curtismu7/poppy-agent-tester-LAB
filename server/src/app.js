@@ -277,9 +277,10 @@ export function createApp({ configFile = CONFIG, agent, health = createHealth({ 
   const chatTool = (ws, req) => async (name, input) => {
     const rec = sessions.get(ws);
     if (name === 'read_company') {
-      const d = demoDefaultsFrom();
-      const origin = rec.config?.origin || d.origin; const issuer = rec.config?.issuer || d.issuer;
-      if (!origin || !issuer) return { status: 409, body: { error: 'no_company', message: 'No Company is set: type it on the Run it tab, or set PAT_DEMO_COMPANY_ORIGIN and PAT_DEMO_PF_ISSUER.' } };
+      // The workspace's Company once discovered, else the pair typed above the chat, else the deployment defaults.
+      const typed = { origin: req.body?.origin, issuer: req.body?.issuer };
+      const { origin, issuer } = rec.config ?? (typed.origin && typed.issuer ? typed : demoDefaultsFrom());
+      if (!origin || !issuer) return { status: 409, body: { error: 'no_company', message: 'No Company is set: type the Company origin and the PingFederate issuer above the chat, or set PAT_DEMO_COMPANY_ORIGIN and PAT_DEMO_PF_ISSUER.' } };
       return runStep(discoverStep, ws, req, { origin, issuer }, { needsAgent: false });
     }
     if (name === 'start_sign_in') return runStep(authorizeStep, ws, req, {});
@@ -297,6 +298,11 @@ export function createApp({ configFile = CONFIG, agent, health = createHealth({ 
     if (!chat) return res.status(503).json({ error: 'chat_not_configured', message: 'Set ANTHROPIC_API_KEY in .env and restart to talk to a live agent. The guided chat works without it.' });
     const text = req.body?.text;
     if (typeof text !== 'string' || !text.trim() || text.length > MAX_TEXT) return res.status(400).json({ error: 'bad_text', message: `Send {"text": "..."} of 1 to ${MAX_TEXT} characters.` });
+    // Optional: the Company origin and issuer typed above the chat (checked again by the discover step).
+    for (const k of ['origin', 'issuer']) {
+      const v = req.body?.[k];
+      if (v !== undefined && (typeof v !== 'string' || v.length > 300)) return res.status(400).json({ error: 'bad_company', message: `${k} must be a URL of at most 300 characters.` });
+    }
     const rec = sessions.get(ws);
     if (rec.chatBusy) return res.status(409).json({ error: 'busy', message: 'The agent is still answering the last message.' });
     rec.chatBusy = true;

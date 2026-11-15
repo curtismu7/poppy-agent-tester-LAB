@@ -3,7 +3,7 @@
 import crypto from 'node:crypto';
 import { jwkThumbprint, signJws } from './jose.js';
 
-export const DELEGATION_TYP = 'pap-delegation+jwt';
+export const DELEGATION_TYP = 'poppy-delegation+jwt';
 export const SESSION_TYP = 'poppy-session+jwt';
 export const MAX_DELEGATION_SECONDS = 24 * 3600;
 
@@ -32,5 +32,5 @@ export function signSession({ delegation, delegatedKey, clientId, issuer, sid, s
     jti: crypto.randomUUID(),
   };
   if (accessToken) payload.ath = crypto.createHash('sha256').update(accessToken).digest('base64url');
-  return signJws({ typ: SESSION_TYP, alg: 'ES256', kid: jwkThumbprint(delegatedKey.publicJwk), pap_dlg: delegation }, payload, delegatedKey.privateKey);
+  return signJws({ typ: SESSION_TYP, alg: 'ES256', kid: jwkThumbprint(delegatedKey.publicJwk), poppy_dlg: delegation }, payload, delegatedKey.privateKey);
 }

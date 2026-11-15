@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { discover, parseOrigin, DiscoverError } from '../src/discover.js';
 
 const ORIGIN = 'https://company.example';
-const POPPY = { protocol_version: '0.3', organization: { domain: 'company.example' }, auth: { issuer: 'https://pf.example:9031', scopes: { 'accounts:read': 'x' }, scope_hints: { 'accounts:read': { changes: 'none', personal_data: true } } } };
+const POPPY = { protocol_version: '1.0', organization: { domain: 'company.example' }, auth: { issuer: 'https://pf.example:9031', scopes: { 'accounts:read': 'x' }, scope_hints: { 'accounts:read': { changes: 'none', personal_data: true } } } };
 const RESOURCE = { resource: ORIGIN, authorization_servers: ['https://pf.example:9031'] };
 
 const fake = (map) => async (url) => {

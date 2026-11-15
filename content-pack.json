@@ -46,7 +46,8 @@
       "term": "Delegation JWT",
       "definition": "A JWT signed by the agent's published key that names a short-lived delegated key (at most 24 hours). The delegated key then signs each Poppy-Session.",
       "aliases": [
-        "pap_dlg"
+        "poppy_dlg",
+        "poppy-delegation+jwt"
       ]
     },
     {
@@ -56,17 +57,26 @@
       "aliases": [
         "Poppy-Session header"
       ]
+    },
+    {
+      "id": "par",
+      "term": "Pushed Authorization Request (PAR)",
+      "definition": "RFC 9126. The agent sends the sign-in request to the authorization server directly, signed with its private key, and opens the browser with only client_id and a one-time request_uri. FAPI 2.0 Companies require it.",
+      "aliases": [
+        "RFC 9126",
+        "request_uri"
+      ]
     }
   ],
   "sources": [
     {
       "id": "poppy-spec",
-      "title": "Personal Agent Protocol, Draft 0.3",
-      "url": "https://personalagentprotocol.org/docs/introduction",
+      "title": "Personal Agent Protocol, spec 1.0",
+      "url": "https://personalagentprotocol.org/docs/1.0/spec",
       "kind": "standard",
-      "use": "Defines poppy.json, the protected-resource document and the Poppy-Session header.",
+      "use": "Defines poppy.json, the protected-resource document and the Poppy-Session and Poppy-Version headers.",
       "status": "read",
-      "checked": "2026-10-29"
+      "checked": "2026-11-15"
     }
   ],
   "cards": [

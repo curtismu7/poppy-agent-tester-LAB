@@ -4,7 +4,10 @@ import { readCapped, BodyTooLarge } from './body.js';
 
 const MAX_BYTES = 256 * 1024;
 const TIMEOUT_MS = 8000;
-export const SUPPORTED_VERSION = '0.3';
+// The version this agent implements and declares in Poppy-Version (spec 3.4). From 1.0 two versions are compatible when the
+// major version is the same, so a Company on 1.2 is read as 1.0 defines it; a Company on 0.3 or 2.0 is not compatible.
+export const SUPPORTED_VERSION = '1.0';
+export const compatibleVersion = (v) => typeof v === 'string' && /^\d+\.\d+$/.test(v) && v.split('.')[0] === SUPPORTED_VERSION.split('.')[0];
 
 export class DiscoverError extends Error {
   constructor(code, message) { super(message); this.code = code; }
@@ -66,7 +69,7 @@ export async function discover(originText, { fetchImpl = fetch } = {}) {
   // auth.issuer is optional when the protected-resource document lists exactly one authorization server.
   const issuer = typeof poppy.auth?.issuer === 'string' ? poppy.auth.issuer : (servers.length === 1 ? servers[0] : undefined);
   const checks = [
-    { id: 'version', ok: poppy.protocol_version === SUPPORTED_VERSION, note: `protocol_version ${poppy.protocol_version ?? 'missing'} (this tester speaks ${SUPPORTED_VERSION})` },
+    { id: 'version', ok: compatibleVersion(poppy.protocol_version), note: `protocol_version ${poppy.protocol_version ?? 'missing'} (this tester speaks ${SUPPORTED_VERSION}; same major version is compatible)` },
     { id: 'domain', ok: typeof poppy.organization?.domain === 'string' && /^[a-z0-9.-]+$/i.test(poppy.organization.domain) && poppy.organization.domain.toLowerCase() === host.toLowerCase(), note: `organization.domain ${poppy.organization?.domain ?? 'missing'} must be a bare domain name equal to the host ${host} (no scheme, port or path)` },
     { id: 'issuer', ok: typeof issuer === 'string' && issuer.startsWith('https://'), note: `issuer ${issuer ?? 'missing'}${typeof poppy.auth?.issuer === 'string' ? '' : ' (taken from the protected-resource document)'}` },
     { id: 'scope_hints', ok: Object.keys(poppy.auth?.scopes ?? {}).every((s) => poppy.auth?.scope_hints?.[s]), note: 'every scope has a scope_hint' },

@@ -20,6 +20,9 @@ function mockApi({ info = { hosted: false, configured: true, agentClientId: "htt
   });
 }
 
+const toCalls = () => fireEvent.click(screen.getByTestId("pager-next"));
+const toToken = () => { toCalls(); fireEvent.click(screen.getByTestId("pager-next")); };
+
 beforeEach(() => { window.location.hash = ""; setJsonView("raw"); }); // the Form | JSON choice is shared module state: tests that read pane text say which view they read
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 
@@ -33,6 +36,7 @@ describe("banner", () => {
   it("says HOSTED SIMULATION on the hosted build and keeps every action off", async () => {
     mockApi({ info: { hosted: true, configured: false } });
     render(<App />);
+    toCalls();
     await waitFor(() => expect(screen.getByTestId("banner").textContent).toMatch(/^HOSTED SIMULATION/));
     expect(screen.getByTestId("discover")).toBeDisabled();
     expect(screen.getByTestId("signin")).toBeDisabled();
@@ -41,10 +45,11 @@ describe("banner", () => {
   it("says MODE UNKNOWN (not 'loading') when /api/info fails, and offers no action", async () => {
     mockApi({ info: "fail" });
     render(<App />);
+    toCalls();
     await waitFor(() => expect(screen.getByTestId("banner").textContent).toBe(BANNER_FAILED));
     expect(screen.getByTestId("mode-select").querySelector('option[value="real"]').disabled).toBe(true); // offers no action while the server is unreachable
     fireEvent.change(screen.getByLabelText("Company origin"), { target: { value: "https://company.example" } });
-    fireEvent.change(screen.getByLabelText(/PingFederate issuer/), { target: { value: "https://pf.example" } });
+    fireEvent.change(screen.getByLabelText(/Authorization server issuer/), { target: { value: "https://pf.example" } });
     expect(screen.getByTestId("discover")).toBeDisabled();
     expect(screen.getByTestId("signin")).toBeDisabled();
     expect(screen.getByTestId("call")).toBeDisabled();
@@ -52,6 +57,7 @@ describe("banner", () => {
   it("offers no action while the mode is still loading", () => {
     mockApi();
     render(<App />);
+    toCalls();
     expect(screen.getByTestId("banner").textContent).toBe(BANNER_UNKNOWN);
     expect(screen.getByTestId("discover")).toBeDisabled();
   });
@@ -61,10 +67,11 @@ describe("run it", () => {
   it("needs both typed origins before Read the Company is enabled, and shows the checks after", async () => {
     mockApi({ post: { "/api/discover": json({ ok: true, checks: [], poppy: { auth: { scopes: { "accounts:read": "Read" } } } }) } });
     render(<App />);
+    toCalls();
     await waitFor(() => expect(screen.getByTestId("mode-select")).toHaveValue("real"));
     expect(screen.getByTestId("discover")).toBeDisabled();
     fireEvent.change(screen.getByLabelText('Company origin'), { target: { value: "https://company.example" } });
-    fireEvent.change(screen.getByLabelText(/PingFederate issuer/), { target: { value: "https://pf.example" } });
+    fireEvent.change(screen.getByLabelText(/Authorization server issuer/), { target: { value: "https://pf.example" } });
     expect(screen.getByTestId("discover")).toBeEnabled();
     fireEvent.click(screen.getByTestId("discover"));
     await waitFor(() => expect(screen.getByTestId("msg").textContent).toMatch(/pass every check/));
@@ -72,9 +79,10 @@ describe("run it", () => {
   it("shows the issuer the Company really publishes, and the checks, when the issuer does not match", async () => {
     mockApi({ post: { "/api/discover": json({ error: "issuer_mismatch", message: "The Company publishes issuer https://real-issuer.example, not the one you typed (https://other.example).", published: "https://real-issuer.example", discovery: { ok: false, checks: [{ id: "domain", ok: false, note: "organization.domain x must equal the host y" }] } }, 400) } });
     render(<App />);
+    toCalls();
     await waitFor(() => expect(screen.getByTestId("mode-select")).toHaveValue("real"));
     fireEvent.change(screen.getByLabelText('Company origin'), { target: { value: "https://company.example" } });
-    fireEvent.change(screen.getByLabelText(/PingFederate issuer/), { target: { value: "https://other.example" } });
+    fireEvent.change(screen.getByLabelText(/Authorization server issuer/), { target: { value: "https://other.example" } });
     fireEvent.click(screen.getByTestId("discover"));
     await waitFor(() => expect(screen.getByTestId("msg").textContent).toMatch(/real-issuer\.example/));
     expect(screen.getByLabelText("Discovery checks").textContent).toMatch(/organization\.domain/);
@@ -82,6 +90,7 @@ describe("run it", () => {
   it("shows a warning check as 'warn' (not 'fail') and an unreachable host by name", async () => {
     mockApi({ state: { ...DISCOVERED, discovery: { ...DISCOVERED.discovery, checks: [{ id: "resource", ok: true, note: "resource matches" }, { id: "protected_resources", ok: false, level: "warn", note: "issuer metadata lists nothing" }] } } });
     render(<App />);
+    toCalls();
     const list = await screen.findByLabelText("Discovery checks");
     expect(list.textContent).toMatch(/warn/);
     expect(list.textContent).not.toMatch(/fail/);
@@ -89,9 +98,10 @@ describe("run it", () => {
   it("names the Company and issuer when one cannot be reached", async () => {
     mockApi({ post: { "/api/discover": json({ error: "upstream", message: "fetch failed" }, 502) } });
     render(<App />);
+    toCalls();
     await waitFor(() => expect(screen.getByTestId("mode-select")).toHaveValue("real"));
     fireEvent.change(screen.getByLabelText("Company origin"), { target: { value: "https://company.example" } });
-    fireEvent.change(screen.getByLabelText(/PingFederate issuer/), { target: { value: "https://pf.example" } });
+    fireEvent.change(screen.getByLabelText(/Authorization server issuer/), { target: { value: "https://pf.example" } });
     fireEvent.click(screen.getByTestId("discover"));
     await waitFor(() => expect(screen.getByTestId("msg").textContent).toMatch(/Check https:\/\/company\.example and https:\/\/pf\.example/));
   });
@@ -101,6 +111,7 @@ describe("run it", () => {
     const base = globalThis.fetch;
     globalThis.fetch = vi.fn((url, opts = {}) => (url === "/api/authorize" ? authorize(JSON.parse(opts.body)) : base(url, opts)));
     render(<App />);
+    toCalls();
     const box = await screen.findByLabelText(/Send the Company as the resource/);
     expect(box).not.toBeChecked();
     await waitFor(() => expect(screen.getByTestId("signin")).toBeEnabled());
@@ -114,6 +125,7 @@ describe("run it", () => {
   it("enables sign-in after discovery, and the call only once signed in", async () => {
     mockApi({ state: DISCOVERED });
     render(<App />);
+    toCalls();
     await waitFor(() => expect(screen.getByTestId("signin")).toBeEnabled());
     expect(screen.getByTestId("call")).toBeDisabled();
   });
@@ -121,12 +133,14 @@ describe("run it", () => {
     const evil = "<img src=x onerror=alert(1)>";
     mockApi({ state: { ...DISCOVERED, signedIn: true, token: { access_token: evil, claims: { x: evil } } } });
     render(<App />);
+    toToken();
     await waitFor(() => expect(screen.getByLabelText("Access token").textContent).toContain(evil));
     expect(document.querySelector("img")).toBeNull();
   });
   it("shows token claims through the shared pane: a Form | JSON toggle, the JSON text in full view", async () => {
     mockApi({ state: { ...DISCOVERED, signedIn: true, token: { access_token: "opaque", claims: { sub: "person-1", scope: "accounts:read" } } } });
     render(<App />);
+    toToken();
     const pane = await screen.findByLabelText("Token claims");
     expect(pane.tagName).toBe("PRE");
     expect(pane.textContent).toMatch(/"sub": "person-1"/);
@@ -197,10 +211,11 @@ describe("one-click defaults", () => {
       },
     });
     render(<App />);
+    toCalls();
     await waitFor(() => expect(screen.getByTestId("mode-select")).toHaveValue("real"));
     // the form is pre-filled from the deployment's defaults
     expect(screen.getByLabelText("Company origin").value).toBe("https://company.example");
-    expect(screen.getByLabelText(/PingFederate issuer/).value).toBe("https://pf.example:9031");
+    expect(screen.getByLabelText(/Authorization server issuer/).value).toBe("https://pf.example:9031");
     // one click: discover then authorize, and the browser is sent to PingFederate
     delete window.location;
     window.location = { assign: vi.fn() };

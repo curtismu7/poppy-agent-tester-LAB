@@ -18,6 +18,13 @@ export function authorizationUrl({ authorizationEndpoint, clientId, redirectUri,
   return u.toString();
 }
 
+/** The sign-in URL when the parameters were pushed (RFC 9126): only client_id and the request_uri travel through the browser. */
+export function parAuthorizationUrl({ authorizationEndpoint, clientId, requestUri }) {
+  const u = new URL(authorizationEndpoint);
+  u.search = new URLSearchParams({ client_id: clientId, request_uri: requestUri }).toString();
+  return u.toString();
+}
+
 /** PingFederate wants the header typ client-authentication+jwt and aud equal to the issuer. */
 export function clientAssertion({ clientId, issuer, kid, signingKey, now = Math.floor(Date.now() / 1000) }) {
   return signJws(
@@ -25,6 +32,20 @@ export function clientAssertion({ clientId, issuer, kid, signingKey, now = Math.
     { iss: clientId, sub: clientId, aud: issuer, iat: now, exp: now + 60, jti: crypto.randomUUID() },
     signingKey,
   );
+}
+
+/**
+ * The pushed authorization request (RFC 9126) as plain data: the same parameters the browser URL would carry, plus the client
+ * assertion that proves who is pushing them. The agent authenticates here, before the person sees any page.
+ */
+export function parRequest({ parEndpoint, clientId, issuer, kid, signingKey, redirectUri, scope, state, challenge, resource }) {
+  const form = {
+    response_type: 'code', client_id: clientId, redirect_uri: redirectUri, scope, state, code_challenge: challenge, code_challenge_method: 'S256',
+    client_assertion_type: 'urn:ietf:params:oauth:client-assertion-type:jwt-bearer',
+    client_assertion: clientAssertion({ clientId, issuer, kid, signingKey }),
+  };
+  if (resource) form.resource = resource;
+  return { url: parEndpoint, method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams(form).toString() };
 }
 
 /** The token request as plain data, so the page can show it before it is sent. */

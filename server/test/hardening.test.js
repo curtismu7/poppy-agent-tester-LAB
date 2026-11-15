@@ -86,11 +86,14 @@ test('issuer metadata: RFC 8414 first, then OpenID discovery; a hostile or missi
 test('discovery checks: version, domain, optional issuer, and a missing domain are judged as the spec says', async () => {
   const origin = 'https://company.example';
   const doc = (poppy, resource = { resource: origin, authorization_servers: ['https://pf.example'] }) => async (u) => new Response(JSON.stringify(u.endsWith('poppy.json') ? poppy : resource), { status: 200 });
-  const base = { protocol_version: '0.3', organization: { domain: 'company.example' }, auth: { issuer: 'https://pf.example', scopes: { 'a:r': 'x' }, scope_hints: { 'a:r': { changes: 'none', personal_data: true } } } };
+  const base = { protocol_version: '1.0', organization: { domain: 'company.example' }, auth: { issuer: 'https://pf.example', scopes: { 'a:r': 'x' }, scope_hints: { 'a:r': { changes: 'none', personal_data: true } } } };
   const ok = async (poppy, resource) => (await discover(origin, { fetchImpl: doc(poppy, resource) }));
   assert.equal((await ok(base)).ok, true);
   assert.equal((await ok({ ...base, protocol_version: '9.9' })).checks.find((c) => c.id === 'version').ok, false);
   assert.equal((await ok({ ...base, protocol_version: '0.4' })).checks.find((c) => c.id === 'version').ok, false);
+  // spec 3.4: from 1.0 two versions are compatible when the major version is the same; 0.3 and 2.0 are not
+  assert.equal((await ok({ ...base, protocol_version: '1.2' })).checks.find((c) => c.id === 'version').ok, true);
+  for (const v of ['0.3', '2.0', '1', '1.0.0', 1, null]) assert.equal((await ok({ ...base, protocol_version: v })).checks.find((c) => c.id === 'version').ok, false, String(v));
   assert.equal((await ok({ ...base, organization: { domain: 'someone-else.example' } })).checks.find((c) => c.id === 'domain').ok, false);
   assert.equal((await ok({ ...base, organization: undefined })).checks.find((c) => c.id === 'domain').ok, false);
   assert.equal((await ok({ ...base, organization: { domain: 'COMPANY.example' } })).checks.find((c) => c.id === 'domain').ok, true, 'case-insensitive');

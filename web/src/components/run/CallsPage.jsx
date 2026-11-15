@@ -24,7 +24,7 @@ function Row({ row, open }) {
           <Why why={row.why} />
           {row.kv.length > 0 && <dl className="rp-kv">{row.kv.map(([k, v]) => <div key={k}><dt>{k}</dt><dd>{v}</dd></div>)}</dl>}
           {row.raw.length > 0 ? row.raw.map((r) => (
-            <details key={r.label} className="rp-raw"><summary>Raw: {r.label}</summary><Json value={r.value} label={`${row.id} ${r.label}`} hot={POPPY_HOT} /></details>
+            <details key={r.label} className="rp-raw" open={r.decoded}><summary>{r.decoded ? r.label : `Raw: ${r.label}`}</summary><Json value={r.value} label={`${row.id} ${r.label}`} hot={POPPY_HOT} /></details>
           )) : <p className="muted">Nothing on the wire yet for this call.</p>}
         </div>
       </details>

@@ -3,7 +3,7 @@
 // beyond the scripted chat lines themselves, which say what the real requests did.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getJson, postJson } from "../api";
-import Json from "./Json";
+import Json, { POPPY_HOT } from "./Json";
 import PatternDiagram from "./PatternDiagram";
 import { markEdges } from "../hooks/useDiagramStepper";
 
@@ -76,7 +76,7 @@ function StepRow({ step, onOpen, open }) {
         <span className="atlas-step__result">{result}</span>
         <a className="atlas-step__spec" href={`${SPEC}${specSection}`} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}>spec{specSection.replace("#", " §")}</a>
       </button>
-      {open && <Json value={detail} label={`${title} detail`} testId={`atlas-detail-${kind}`} />}
+      {open && <Json value={detail} label={`${title} detail`} testId={`atlas-detail-${kind}`} hot={POPPY_HOT} />}
     </li>
   );
 }

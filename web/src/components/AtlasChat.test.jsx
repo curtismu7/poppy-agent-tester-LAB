@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import AtlasChat from "./AtlasChat";
+import { setJsonView } from "./JsonPane";
 
 const json = (body, status = 200) => Promise.resolve({ ok: status < 400, status, json: () => Promise.resolve(body) });
 const STATE = { workspace: "w", config: null, discovery: null, signedIn: false, token: null, steps: [] };
@@ -28,7 +29,7 @@ function mockApi({ state = STATE, post = {} } = {}) {
   });
 }
 
-beforeEach(() => { window.HTMLElement.prototype.scrollIntoView = vi.fn(); });
+beforeEach(() => { window.HTMLElement.prototype.scrollIntoView = vi.fn(); setJsonView("raw"); }); // the Form | JSON choice is shared module state
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 
 describe("AtlasChat", () => {
@@ -95,7 +96,7 @@ describe("AtlasChat", () => {
     fireEvent.click(chip);
     await waitFor(() => expect(screen.getByTestId("atlas-step-call")).toBeInTheDocument());
     fireEvent.click(screen.getByTestId("atlas-step-call").querySelector("button"));
-    expect(screen.getByTestId("atlas-detail-call").textContent).toMatch(/person-1/);
+    expect(screen.getByTestId("atlas-detail-call").textContent).toMatch(/"user_id": "person-1"/);
     expect(screen.getAllByText(/Here it is/).length).toBeGreaterThan(0);
   });
 });

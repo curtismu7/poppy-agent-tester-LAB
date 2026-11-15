@@ -100,12 +100,53 @@ function Canvas({ pattern, positions, onMove, stepper, activeEdge = null }) {
   );
 }
 
+// The explanation that travels with the walkthrough: beside the canvas, always the same size (no layout jump), so the arrow in focus
+// and what it means are on screen together. Before Simulate it lists the steps; any step can be clicked to jump there.
+function Narration({ steps, stepper }) {
+  const i = stepper.step;
+  const step = i >= 0 ? steps[i] : null;
+  return (
+    <aside className="pat-narr" aria-label="What each step means" data-testid="pattern-narration">
+      {/* Live only while paused: during auto-play the step bar's short caption is the announcement, so a screen reader is not
+          queued a full explanation every 2.5 s. Focusable, because on a narrow screen it scrolls. */}
+      <div className="pat-narr__now" role="region" aria-label="Current step explanation" tabIndex={0} aria-live={stepper.paused ? "polite" : "off"} data-testid="pattern-now">
+        {step ? (
+          <>
+            <p className="pat-narr__count">Step {i + 1} of {steps.length}</p>
+            <h3>{step.label}</h3>
+            <h4>What happens</h4>
+            <p>{step.say}</p>
+            {step.why && (<><h4>Why it matters</h4><p>{step.why}</p></>)}
+          </>
+        ) : (
+          <>
+            <h3>Press Simulate</h3>
+            <p>The {steps.length} arrows play in order, and each one is explained here as it happens: what the request is, and why it is there. Pause any time, or pick a step below.</p>
+          </>
+        )}
+      </div>
+      <ol className="pat-narr__list">
+        {steps.map((s, n) => (
+          <li key={n}>
+            <button type="button" className={`pat-narr__item${n === i ? " is-now" : n < i ? " is-done" : ""}`} aria-current={n === i ? "step" : undefined}
+              onClick={() => stepper.goTo(n)} data-testid={`narr-step-${n}`}>
+              <span className="pat-narr__n">{n + 1}</span> {s.label}
+            </button>
+          </li>
+        ))}
+      </ol>
+    </aside>
+  );
+}
+
 export default function PatternDiagram({ pattern, resetSignal = 0, activeEdge = null }) {
   const initial = useMemo(() => Object.fromEntries(pattern.nodes.map((n) => [n.id, { x: n.x, y: n.y }])), [pattern]);
   const [positions, setPositions] = useState(initial);
   const stepper = useDiagramStepper(pattern.steps.length);
   const onMove = useCallback((id, p) => setPositions((cur) => ({ ...cur, [id]: { x: p.x, y: p.y } })), []);
-  const pageDriven = activeEdge !== null && activeEdge >= 0; // a page (e.g. the chat) drives the highlight itself
+  // A page that passes activeEdge at all (the chat, -1 before its first step) drives the highlight itself and gets no narration panel.
+  const pageDriven = activeEdge !== null;
+  const pageHasArrow = pageDriven && activeEdge >= 0;
   const step = stepper.step >= 0 ? pattern.steps[stepper.step] : null;
   // Reset restores box positions as well as the walkthrough and the view. The page-level Reset raises resetSignal.
   const reset = useCallback(() => { stepper.stop(); setPositions(initial); setTimeout(() => window.dispatchEvent(new Event(REFIT_EVENT)), 0); }, [stepper.stop, initial]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -114,24 +155,22 @@ export default function PatternDiagram({ pattern, resetSignal = 0, activeEdge = 
   return (
     <section className="pat" aria-label={pattern.title}>
       <h2 className="pat__title">{pattern.title}</h2>
-      <p className="intro">{pattern.intro}</p>
+      <p className="pat__lede">{pattern.intro}</p>
       <DiagramStepBar stepper={stepper} caption={step ? step.label : ""} testId="pattern-step-bar" />
-      {pageDriven && activeEdge < pattern.steps.length && (
+      {pageHasArrow && activeEdge < pattern.steps.length && (
         <article className="track__now" data-testid="pattern-page-now">
           <h3>Arrow {activeEdge + 1}: {pattern.steps[activeEdge].label}</h3>
           <p>{pattern.steps[activeEdge].say}</p>
         </article>
       )}
       <button type="button" className="pat-reset" onClick={reset} data-testid="pattern-reset">Reset positions and walkthrough</button>
-      {step && (
-        <article className="track__now" data-testid="pattern-now">
-          <h3>Step {stepper.step + 1}: {step.label}</h3>
-          <p>{step.say}</p>
-        </article>
-      )}
-      <ReactFlowProvider>
-        <Canvas pattern={pattern} positions={positions} onMove={onMove} stepper={pageDriven ? null : stepper} activeEdge={pageDriven ? activeEdge : null} />
-      </ReactFlowProvider>
+      <div className={pageDriven ? undefined : "pat-stage"}>
+        <ReactFlowProvider>
+          {/* The canvas follows the page only once it names an arrow; before that (the chat at -1) the step bar still walks it. */}
+          <Canvas pattern={pattern} positions={positions} onMove={onMove} stepper={pageHasArrow ? null : stepper} activeEdge={pageHasArrow ? activeEdge : null} />
+        </ReactFlowProvider>
+        {!pageDriven && <Narration steps={pattern.steps} stepper={stepper} />}
+      </div>
       <p className="keys">Drag any box. Moved: {Object.keys(positions).filter((k) => positions[k].x !== initial[k].x || positions[k].y !== initial[k].y).length} box(es).</p>
     </section>
   );

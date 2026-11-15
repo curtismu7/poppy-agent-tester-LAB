@@ -20,3 +20,32 @@
 .pat-elabel { position: absolute; pointer-events: none; padding: 1px 6px; border-radius: var(--radius-sm); border: 1px solid var(--border); background: var(--surface); color: var(--text); font-size: 13px; white-space: nowrap; }
 .pat-elabel--now { border-color: var(--status-info); font-weight: 700; }
 .pat-elabel--dim { opacity: 0.55; }
+/* The lede under the title. (The app's .intro is the dark header's on-box text and would vanish on the page ground.) */
+.pat__lede { margin: 0 0 10px; max-width: 80ch; color: var(--text-body); font-size: var(--font-size-sm); line-height: 1.5; }
+/* Canvas and narration side by side; the narration keeps its size, so nothing below or beside it moves as the steps play. */
+.pat-stage { display: grid; gap: 12px; grid-template-columns: minmax(0, 1fr) minmax(300px, 400px); align-items: start; }
+/* Beside the canvas the explanation sizes to its text: it can grow without moving the diagram. */
+.pat-narr { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.pat-narr__now { min-height: 300px; padding: 12px 14px; border: 1px solid var(--status-info); border-radius: var(--radius-lg); background: var(--surface); }
+.pat-narr__now h3 { margin: 0 0 8px; font-size: var(--font-size-lg); color: var(--text); }
+.pat-narr__now h4 { margin: 10px 0 2px; font-size: var(--font-size-2xs); font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: var(--danger-text); }
+.pat-narr__now p { margin: 0; font-size: var(--font-size-sm); line-height: 1.5; color: var(--text-body); }
+.pat-narr__now .pat-narr__count { margin-bottom: 2px; font-size: var(--font-size-2xs); font-weight: 700; color: var(--status-info); }
+.pat-narr__list { list-style: none; margin: 0; padding: 4px; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); }
+.pat-narr__item { display: flex; gap: 8px; align-items: baseline; width: 100%; min-height: 0; padding: 5px 8px; border: 0; border-radius: var(--radius-md); background: transparent; color: var(--text); font-weight: 500; font-size: var(--font-size-sm); text-align: left; }
+.pat-narr__item:hover { background: var(--surface-2); }
+.pat-narr__item.is-done { color: var(--muted); }
+.pat-narr__item.is-now { background: var(--surface-2); font-weight: 700; box-shadow: inset 3px 0 0 var(--status-info); }
+.pat-narr__n { flex: 0 0 auto; min-width: 1.6em; font-family: var(--font-mono); font-size: var(--font-size-2xs); color: var(--status-info); }
+.app--presenter .pat-narr__now p { font-size: var(--font-size-lg); line-height: 1.55; }
+.app--presenter .pat-narr__now h3 { font-size: var(--font-size-xl); }
+.app--presenter .pat-narr__now h4, .app--presenter .pat-narr__now .pat-narr__count { font-size: var(--font-size-sm); }
+.app--presenter .pat-narr__item { font-size: var(--font-size-base); }
+/* Narrow screens: the explanation sits above the canvas so the two stay on screen together. */
+@media (max-width: 900px) {
+  .pat-stage { grid-template-columns: 1fr; }
+  /* Above the canvas a fixed height keeps the diagram from jumping as the text changes. */
+  .pat-narr { order: -1; }
+  .pat-narr__now { min-height: 0; height: 260px; overflow-y: auto; }
+  .pat-narr__list { max-height: 170px; overflow-y: auto; }
+}

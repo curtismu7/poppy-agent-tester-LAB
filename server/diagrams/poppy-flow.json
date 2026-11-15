@@ -1,8 +1,8 @@
 {
   "schema": "diagram-studio/1",
   "id": "poppy-flow",
-  "title": "Poppy: discover, sign in, call the API",
-  "lede": "A personal agent identified by a URL discovers a Company, signs in through PingFederate with PKCE, then signs every request with a Poppy-Session. Each step below is one real request this app makes.",
+  "title": "Personal Agent Protocol: discover, sign in, call the API",
+  "lede": "A personal agent identified by a URL discovers a Company, pushes its sign-in request to PingFederate (PAR), lets the person sign in, then signs every request with a Poppy-Session. Solid arrows are what the agent (or the person's browser) sends, dashed arrows are the answers; press Simulate and each step explains itself.",
   "groups": {
     "actor": {
       "label": "The agent",
@@ -30,43 +30,65 @@
       "label": "PingFederate",
       "group": "idp",
       "x": 420,
-      "y": 0
+      "y": -60
     },
     {
       "id": "company",
       "label": "Company API",
       "group": "company",
       "x": 420,
-      "y": 300
+      "y": 360
     }
   ],
   "edges": [
     {
       "source": "agent",
       "target": "company",
-      "label": "GET poppy.json + protected resource"
+      "label": "GET poppy.json + resource doc"
     },
     {
       "source": "company",
       "target": "agent",
-      "label": "scopes, issuer, APIs",
+      "label": "version, scopes, issuer, APIs",
       "dashed": true
     },
     {
       "source": "agent",
       "target": "pf",
-      "label": "authorize: client_id is a URL, PKCE"
+      "label": "PAR: push the request (private_key_jwt)"
     },
     {
       "source": "pf",
       "target": "agent",
-      "label": "code, then token (private_key_jwt)",
+      "label": "request_uri",
+      "dashed": true
+    },
+    {
+      "source": "agent",
+      "target": "pf",
+      "label": "person signs in (client_id + request_uri)"
+    },
+    {
+      "source": "pf",
+      "target": "agent",
+      "label": "code + iss, back to /cb",
+      "dashed": true
+    },
+    {
+      "source": "agent",
+      "target": "pf",
+      "label": "token: code + PKCE + assertion"
+    },
+    {
+      "source": "pf",
+      "target": "agent",
+      "label": "access token (client_id = agent URL)",
       "dashed": true
     },
     {
       "source": "agent",
       "target": "company",
-      "label": "GET /me: Bearer + Poppy-Session"
+      "label": "GET /me: token + Poppy-Session + Poppy-Version"
     },
     {
       "source": "company",
@@ -78,44 +100,82 @@
   "steps": [
     {
       "title": "Discover the Company",
-      "what": "The agent reads /.well-known/poppy.json and the protected-resource document from the one origin you typed, and checks what the spec requires.",
+      "what": "The agent reads /.well-known/poppy.json and /.well-known/oauth-protected-resource from the one origin you typed. Two public GETs, no identity yet, and no redirects followed.",
+      "why": "This is how an agent meets a Company it has never seen. Nothing is configured on the agent side: the Company's own documents say what it offers and where to sign in.",
       "edges": [
         0
       ]
     },
     {
       "title": "The Company answers",
-      "what": "Scopes with scope_hints, the issuer, and the APIs an agent may call. The resource must be exactly the Company origin.",
+      "what": "poppy.json gives the protocol version (1.0 here), the scopes, each with a scope_hint, the issuer and the APIs. The agent checks the version is compatible (same major), the domain is the host, and the resource is exactly the origin.",
+      "why": "scope_hints say whether a scope changes anything or touches personal data, so the agent can tell the person what they are about to allow. The exact-resource rule stops one Company's document from speaking for another resource on the same host.",
       "edges": [
         1
       ]
     },
     {
-      "title": "Ask to sign in",
-      "what": "The agent has no registered client. Its client_id is the URL of its own metadata document, and PingFederate fetches it. PKCE protects the code.",
+      "title": "Push the sign-in request (PAR)",
+      "what": "The issuer's metadata lists a pushed_authorization_request_endpoint, so the agent POSTs the whole sign-in request there: scope, redirect, PKCE challenge and state, with a client assertion signed by its private key (private_key_jwt). Its client_id is the URL of its own metadata document (CIMD).",
+      "why": "The authorization server knows which agent is asking before the person sees any page, and it fetches the agent's client.json from that URL, so it never holds a stale copy of the agent's keys or redirect address (PingFederate still needs an operator-made CIMD policy for that exact URL). FAPI 2.0 Companies require PAR (RFC 9126).",
       "edges": [
         2
       ]
     },
     {
-      "title": "Get a token",
-      "what": "The agent exchanges the code, proving who it is with a signed assertion (private_key_jwt). The token's client_id is the agent URL.",
+      "title": "A one-time request_uri",
+      "what": "PingFederate stores the pushed request and answers 201 with a short-lived request_uri.",
+      "why": "Nothing in the browser can change the request now: the address the person opens carries only client_id and this reference.",
       "edges": [
         3
       ]
     },
     {
-      "title": "Call the API",
-      "what": "Every request carries the token and a Poppy-Session: a delegation signed by the agent key, and a session signed by a short-lived delegated key.",
+      "title": "The person signs in",
+      "what": "The browser opens the authorization endpoint with just client_id and request_uri. The person signs in on the Company's own page and presses Allow for this agent and this scope.",
+      "why": "The only step the person sees. They never hand the agent a password, and the consent names the agent by its URL, so they can revoke it like any other app.",
       "edges": [
         4
       ]
     },
     {
-      "title": "The Company verifies",
-      "what": "It checks the token, then the session (delegation, method, URL, token hash, no replay) and answers.",
+      "title": "The code comes back",
+      "what": "PingFederate redirects to the agent's /cb with a one-time code and its iss. The agent checks the state, and that iss is the issuer it started with (RFC 9207).",
+      "why": "The iss check stops a mix-up attack, where a code from another authorization server is played back to the agent.",
       "edges": [
         5
+      ]
+    },
+    {
+      "title": "Exchange the code",
+      "what": "The agent POSTs the code, the PKCE verifier and a fresh client assertion to the token endpoint.",
+      "why": "PKCE proves the agent that started the sign-in is the one finishing it; the assertion proves it holds the key published at its jwks_uri. There is no client secret anywhere.",
+      "edges": [
+        6
+      ]
+    },
+    {
+      "title": "The access token",
+      "what": "The token comes back with client_id set to the agent's URL, the person as sub, and the scope that was granted.",
+      "why": "Every API the Company runs can now tell agent traffic from a person's, and exactly which agent it is.",
+      "edges": [
+        7
+      ]
+    },
+    {
+      "title": "Call the API",
+      "what": "GET /poppy/api/v1/me with the Bearer token and two more headers: Poppy-Session, a JWT signed for this one request by a short-lived delegated key (the delegation, signed by the agent's key, rides inside it as poppy_dlg), and Poppy-Version: 1.0.",
+      "why": "The token says what the person allowed; the session says which agent is asking right now, for this method, this URL and this token. A stolen token alone is not enough.",
+      "edges": [
+        8
+      ]
+    },
+    {
+      "title": "The Company verifies",
+      "what": "It checks the token, then the session: the delegation against the agent's jwks_uri, the session signature, method and URL, the token hash (ath), a fresh jti, and the version. Then it answers 200 with who the agent acts for.",
+      "why": "A replayed session, one signed for another token, or an unsupported version gets 400 (invalid_session or version_unsupported), and an agent the Company has not allow-listed is refused.",
+      "edges": [
+        9
       ]
     }
   ]

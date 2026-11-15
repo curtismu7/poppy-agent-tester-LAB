@@ -8,12 +8,14 @@ import Json, { POPPY_HOT } from "./Json";
 import PatternDiagram from "./PatternDiagram";
 import { markEdges } from "../hooks/useDiagramStepper";
 
-const SPEC = "https://personalagentprotocol.org/docs/0.4/spec";
+const SPEC = "https://personalagentprotocol.org/docs/1.0/spec";
 
 // The arrow each protocol step highlights on the diagram (indexes into the poppy-flow edges, in order).
-// discover highlights arrow 0, sign-in arrows 2-3, call arrows 4-5.
-const STEP_ARROW = { discover: 0, authorize: 2, token: 3, call: 4 };
-const TOOL_ARROW = { read_company: 0, start_sign_in: 2, call_company_api: 5 };
+// discover 0-1, PAR 2-3, the person's sign-in 4-5, the token 6-7, the call 8-9.
+export const STEP_ARROW = { discover: 0, authorize: 4, token: 7, call: 8 };
+export const ARROW_VERIFIED = 9; // the Company's answer to the call
+// The live agent's tools light the same arrows as the guided chips.
+export const TOOL_ARROW = { read_company: STEP_ARROW.discover, start_sign_in: STEP_ARROW.authorize, call_company_api: ARROW_VERIFIED };
 
 const GREETING_LIVE = "Hi, I'm your personal agent, running on Claude. Ask me about the Company: what's in stock, or where your order is. Every request I make shows up on the right.";
 const GREETING_GUIDED = "Hi, I'm your personal agent. Pick a question below and I'll make the real requests to answer it; each one shows up on the right.";
@@ -168,7 +170,7 @@ export default function AtlasChat({ info, resetSignal }) {
     await refresh();
     if (!r.ok) { setPhase(signedIn ? "signed-in" : "idle"); setMsg(r.body.message ?? r.body.error ?? `HTTP ${r.status}`); return; }
     setLast(r.body);
-    setActiveArrow(5);
+    setActiveArrow(ARROW_VERIFIED);
     say("agent", SCRIPT.call.agentLine(state, r.body));
     setPhase("done");
   };
@@ -176,7 +178,7 @@ export default function AtlasChat({ info, resetSignal }) {
   // After the redirect back from PingFederate the workspace already holds the token.
   useEffect(() => {
     if (state?.signedIn && phase === "signin") {
-      setActiveArrow(3);
+      setActiveArrow(STEP_ARROW.token);
       say("agent", SCRIPT.token.agentLine(state));
       setPhase("signed-in");
     }

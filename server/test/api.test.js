@@ -486,6 +486,20 @@ test('PAR (RFC 9126): when the issuer lists the endpoint the agent pushes the re
   } finally { delete seen.pfMetaOverride; }
 });
 
+test('PAT_DEMO_LOGIN_HINT is pushed as login_hint with PAR, and nothing is sent when it is unset', async () => {
+  seen.pfMetaOverride = { pushed_authorization_request_endpoint: `${originOf(pf)}/as/par.oauth2` };
+  seen.parForms = [];
+  try {
+    await post('/api/discover', { origin: originOf(company), issuer: originOf(pf) }, 'hint1');
+    process.env.PAT_DEMO_LOGIN_HINT = 'demouser';
+    await post('/api/authorize', { scope: 'accounts:read' }, 'hint1');
+    assert.equal(seen.parForms.at(-1).login_hint, 'demouser');
+    delete process.env.PAT_DEMO_LOGIN_HINT;
+    await post('/api/authorize', { scope: 'accounts:read' }, 'hint1');
+    assert.ok(!('login_hint' in seen.parForms.at(-1)));
+  } finally { delete process.env.PAT_DEMO_LOGIN_HINT; delete seen.pfMetaOverride; }
+});
+
 test('PAR: an issuer that lists no endpoint keeps the plain browser URL, and says so', async () => {
   const d = await (await post('/api/discover', { origin: originOf(company), issuer: originOf(pf) }, 'par2')).json();
   const par = d.checks.find((c) => c.id === 'par');

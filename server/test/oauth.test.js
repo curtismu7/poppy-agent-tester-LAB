@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 import { generateEs256Key, decodeJws } from '../src/jose.js';
-import { newPkce, authorizationUrl, clientAssertion, tokenRequest, ASSERTION_TYP } from '../src/oauth.js';
+import { newPkce, authorizationUrl, clientAssertion, tokenRequest, parRequest, ASSERTION_TYP } from '../src/oauth.js';
 import { clientMetadata, jwksDocument } from '../src/agent.js';
 import { verifyEs256 } from './helpers.js';
 
@@ -71,4 +71,14 @@ test('the resource parameter appears on the authorization URL and the token requ
   const t = (resource) => new URLSearchParams(tokenRequest({ tokenEndpoint: `${ISSUER}/t`, clientId: CLIENT, issuer: ISSUER, kid: 'a1', signingKey: k.privateKey, code: 'C', redirectUri: 'https://agent.example/cb', verifier: 'V', resource }).body);
   assert.equal(t('https://company.example').get('resource'), 'https://company.example');
   assert.equal(t(undefined).has('resource'), false);
+});
+
+test('login_hint appears on the authorization URL and in the PAR body only when given', () => {
+  const k = generateEs256Key();
+  const u = (loginHint) => new URL(authorizationUrl({ authorizationEndpoint: `${ISSUER}/a`, clientId: CLIENT, redirectUri: 'https://agent.example/cb', scope: 's', state: 'x', challenge: 'c', loginHint }));
+  assert.equal(u('demouser').searchParams.get('login_hint'), 'demouser');
+  assert.equal(u(undefined).searchParams.has('login_hint'), false);
+  const p = (loginHint) => new URLSearchParams(parRequest({ parEndpoint: `${ISSUER}/par`, clientId: CLIENT, issuer: ISSUER, kid: 'a1', signingKey: k.privateKey, redirectUri: 'https://agent.example/cb', scope: 's', state: 'x', challenge: 'c', loginHint }).body);
+  assert.equal(p('demouser').get('login_hint'), 'demouser');
+  assert.equal(p(undefined).has('login_hint'), false);
 });

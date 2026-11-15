@@ -19,3 +19,7 @@ export const demoDefaultsFrom = (env = process.env) => ({
   p1Issuer: String(env.PAT_DEMO_P1_ISSUER || '').trim(),
   scope: String(env.PAT_DEMO_SCOPE || '').trim(),
 });
+
+// Optional login_hint sent with every sign-in (PAT_DEMO_LOGIN_HINT), so the authorization server pre-fills the username.
+// Kept out of demoDefaultsFrom so it is not published in /api/state.
+export const loginHintFrom = (env = process.env) => String(env.PAT_DEMO_LOGIN_HINT || '').trim();

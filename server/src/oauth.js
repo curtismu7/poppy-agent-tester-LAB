@@ -10,10 +10,11 @@ export function newPkce() {
   return { verifier, challenge: crypto.createHash('sha256').update(verifier).digest('base64url'), method: 'S256' };
 }
 
-export function authorizationUrl({ authorizationEndpoint, clientId, redirectUri, scope, state, challenge, resource }) {
+export function authorizationUrl({ authorizationEndpoint, clientId, redirectUri, scope, state, challenge, resource, loginHint }) {
   const u = new URL(authorizationEndpoint);
   const q = { response_type: 'code', client_id: clientId, redirect_uri: redirectUri, scope, state, code_challenge: challenge, code_challenge_method: 'S256' };
   if (resource) q.resource = resource; // RFC 8707: the token is for this Company's protected resource
+  if (loginHint) q.login_hint = loginHint; // OpenID Connect Core 3.1.2.1: pre-fills the username on the sign-in page
   u.search = new URLSearchParams(q).toString();
   return u.toString();
 }
@@ -38,13 +39,14 @@ export function clientAssertion({ clientId, issuer, kid, signingKey, now = Math.
  * The pushed authorization request (RFC 9126) as plain data: the same parameters the browser URL would carry, plus the client
  * assertion that proves who is pushing them. The agent authenticates here, before the person sees any page.
  */
-export function parRequest({ parEndpoint, clientId, issuer, kid, signingKey, redirectUri, scope, state, challenge, resource }) {
+export function parRequest({ parEndpoint, clientId, issuer, kid, signingKey, redirectUri, scope, state, challenge, resource, loginHint }) {
   const form = {
     response_type: 'code', client_id: clientId, redirect_uri: redirectUri, scope, state, code_challenge: challenge, code_challenge_method: 'S256',
     client_assertion_type: 'urn:ietf:params:oauth:client-assertion-type:jwt-bearer',
     client_assertion: clientAssertion({ clientId, issuer, kid, signingKey }),
   };
   if (resource) form.resource = resource;
+  if (loginHint) form.login_hint = loginHint;
   return { url: parEndpoint, method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams(form).toString() };
 }
 

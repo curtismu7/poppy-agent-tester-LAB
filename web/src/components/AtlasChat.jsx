@@ -25,7 +25,7 @@ const GREETING_GUIDED = "Hi, I'm your personal agent. Pick a question below and 
 const SCRIPT = {
   discover: {
     person: "Do they have my size in stock?",
-    agentLine: (state) => `Found them. I read ${host(state?.config?.origin)}'s documents: ${scopeNames(state).join(", ") || "no scopes published"}, sign-in at ${host(state?.config?.issuer) || "the issuer it names"}.`,
+    agentLine: (state) => `Found them. I read ${host(state?.config?.origin)}'s documents: ${scopeSummary(state)}, sign-in at ${host(state?.config?.issuer) || "the issuer it names"}.`,
     need: "You asked about stock. Reading the Company's documents first.",
   },
   authorize: {
@@ -45,6 +45,15 @@ const SCRIPT = {
 
 function host(u) { try { return new URL(u).host; } catch { return u || ""; } }
 function scopeNames(state) { return Object.keys(state?.discovery?.poppy?.auth?.scopes ?? {}); }
+// A chat-sized summary: the count, plus the scope this run asks for (or the first three). The full list is in the step's JSON.
+export function scopeSummary(state) {
+  const all = scopeNames(state);
+  if (!all.length) return "no scopes published";
+  const want = state?.config?.scope;
+  const shown = all.includes(want) ? [want] : all.slice(0, 3);
+  const rest = all.length - shown.length;
+  return `${all.length} scope${all.length === 1 ? "" : "s"} (${shown.join(", ")}${rest ? ` and ${rest} more` : ""})`;
+}
 function lastCallLine(state, last) {
   const b = last?.response?.body;
   if (last?.response?.status === 200 && b && typeof b === "object") {

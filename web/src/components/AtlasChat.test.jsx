@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import AtlasChat from "./AtlasChat";
+import AtlasChat, { scopeSummary } from "./AtlasChat";
 import { setJsonView } from "./JsonPane";
 
 const json = (body, status = 200) => Promise.resolve({ ok: status < 400, status, json: () => Promise.resolve(body) });
@@ -63,6 +63,15 @@ describe("AtlasChat", () => {
     expect(screen.getByTestId("pattern-page-now").textContent).toMatch(/Arrow 1/);
   });
 
+  it("summarises a long scope list for the chat instead of listing every scope", () => {
+    const scopes = Object.fromEntries(Array.from({ length: 50 }, (_, i) => [`s${i}:read`, "x"]));
+    const withWanted = { config: { scope: "s7:read" }, discovery: { poppy: { auth: { scopes } } } };
+    expect(scopeSummary(withWanted)).toBe("50 scopes (s7:read and 49 more)");
+    expect(scopeSummary({ config: { scope: "missing" }, discovery: { poppy: { auth: { scopes } } } })).toBe("50 scopes (s0:read, s1:read, s2:read and 47 more)");
+    expect(scopeSummary({ discovery: { poppy: { auth: { scopes: { "accounts:read": "Read" } } } } })).toBe("1 scope (accounts:read)");
+    expect(scopeSummary({ discovery: null })).toBe("no scopes published");
+  });
+
   it("surfaces a discover failure as a chat line and a message, not a crash", async () => {
     mockApi({
       state: { ...STATE, config: { origin: "https://company.example", issuer: "https://pf.example" } },
@@ -97,7 +106,7 @@ describe("AtlasChat", () => {
     await waitFor(() => expect(screen.getByTestId("atlas-step-discover")).toBeInTheDocument());
     expect(sent).toEqual([{ origin: "https://company.example", issuer: "https://pf.example" }]);
     // The agent line names what was just read, not the empty state from before the click.
-    expect(screen.getByText(/company\.example's documents: accounts:read, sign-in at pf\.example/)).toBeInTheDocument();
+    expect(screen.getByText(/company\.example's documents: 1 scope \(accounts:read\), sign-in at pf\.example/)).toBeInTheDocument();
     // Once read, the boxes go away and the next question is offered.
     expect(screen.queryByTestId("atlas-company")).toBeNull();
     expect(screen.getByTestId("atlas-chip-0").textContent).toMatch(/order/);

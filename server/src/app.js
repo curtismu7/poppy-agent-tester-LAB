@@ -6,7 +6,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import express from 'express';
-import { isLoopbackHost, makeHostCheck, makeSameOriginWrites } from './safety.js';
+import { isLoopbackHost, isProxiedSameOrigin, makeHostCheck, makeSameOriginWrites } from './safety.js';
 import { createHealth } from './health.js';
 import { hostedFrom, baseUrlFrom, demoDefaultsFrom } from './config.js';
 import { createSessions } from './sessions.js';
@@ -189,9 +189,19 @@ export function createApp({ configFile = CONFIG, agent, health = createHealth({ 
     const state = crypto.randomBytes(16).toString('base64url');
     // RFC 8707 resource: opt-in. PingFederate answers 400 to a resource URI it has not registered, so it is off unless the visitor turns it on.
     const useResource = req.body?.resource === true;
-    // The loopback page this came from (a loopback Host only), so the sign-in can return the browser to it.
+    // The page this came from, so the sign-in can return the browser to it: a loopback Host directly, or the lab-proxy
+    // origin when the request arrived through the family proxy (Host is the proxy's name there, X-Forwarded-Host/-Proto
+    // say where the browser actually is; they are believed only for proxy hosts, never loopback — see safety.js).
     const host = String(req.get('host') || '');
-    const returnTo = isLoopbackHost(host.replace(/:\d+$/, '').replace(/^\[|\]$/g, '')) ? `${req.protocol}://${host}` : null;
+    const bareHost = host.replace(/:\d+$/, '').replace(/^\[|\]$/g, '');
+    let returnTo = isLoopbackHost(bareHost) ? `${req.protocol}://${host}` : null;
+    if (!returnTo && isProxiedSameOrigin(req.headers, proxyHosts)) {
+      const xfHost = String(req.headers['x-forwarded-host'] || '');
+      const xfProto = String(req.headers['x-forwarded-proto'] || 'https').split(',')[0].trim();
+      const proxyPath = String(req.headers['x-forwarded-prefix'] || '').replace(/\/+$/, '');
+      const bHost = xfHost.split(',')[0].trim();
+      if (bHost) returnTo = `${xfProto}://${bHost}${proxyPath}`;
+    }
     rec.pending = { state, verifier: pkce.verifier, useResource, returnTo };
     rec.config.scope = scope;
     pendingByState.set(state, ws);

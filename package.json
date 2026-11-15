@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Plays the Personal Agent from the Personal Agent Protocol (Poppy, Draft 0.3): discovers a Company, signs in with a client metadata URL and PKCE, signs every request with a Poppy-Session, shows each step.",
+  "description": "Plays the Personal Agent from the Personal Agent Protocol (Poppy, spec 1.0): discovers a Company, signs in with a client metadata URL and PKCE, signs every request with a Poppy-Session, shows each step.",
   "license": "MIT",
   "workspaces": [
     "server",

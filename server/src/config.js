@@ -15,5 +15,7 @@ export const baseUrlFrom = (env = process.env) => String(env.PAT_AGENT_BASE_URL 
 export const demoDefaultsFrom = (env = process.env) => ({
   origin: String(env.PAT_DEMO_COMPANY_ORIGIN || '').trim(),
   issuer: String(env.PAT_DEMO_PF_ISSUER || '').trim(),
+  // The second authorization server the page can preselect (PingOne). Empty = the option is shown as not configured here.
+  p1Issuer: String(env.PAT_DEMO_P1_ISSUER || '').trim(),
   scope: String(env.PAT_DEMO_SCOPE || '').trim(),
 });

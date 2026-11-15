@@ -26,6 +26,7 @@ services:
       # One-click defaults for the Run it form (empty = the visitor types their own; shipped text stays .example).
       PAT_DEMO_COMPANY_ORIGIN: ${PAT_DEMO_COMPANY_ORIGIN:-}
       PAT_DEMO_PF_ISSUER: ${PAT_DEMO_PF_ISSUER:-}
+      PAT_DEMO_P1_ISSUER: ${PAT_DEMO_P1_ISSUER:-}
       PAT_DEMO_SCOPE: ${PAT_DEMO_SCOPE:-}
       NODE_EXTRA_CA_CERTS: /data/ca.pem
     read_only: true

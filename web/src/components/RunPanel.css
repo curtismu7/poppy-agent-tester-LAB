@@ -1,0 +1,63 @@
+/* The Run it tab: three pages (what & why, the calls, token & session). Tokens only; the vendored standalone-ui.css is not touched. */
+.rp { max-width: 900px; margin: 0 auto; }
+.rp-page { display: grid; gap: 12px; }
+.rp-eyebrow { margin: 0; color: var(--danger-text); font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; font-size: var(--font-size-2xs); }
+.rp-title { margin: 0; font-size: var(--font-size-xl); line-height: 1.2; }
+.rp-title--sm { font-size: var(--font-size-lg); }
+.rp-lede { margin: 0; color: var(--text-body); font-size: var(--font-size-base); line-height: 1.55; max-width: 70ch; }
+.rp-sub { margin: 6px 0 0; font-size: var(--font-size-base); }
+.rp-cards { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 230px), 1fr)); }
+.rp-cards--4 { grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr)); }
+.rp-card { border: 1px solid var(--border); background: var(--surface); border-radius: var(--radius-lg); padding: 12px 14px; min-width: 0; }
+.rp-card h3, .rp-card h4 { margin: 0 0 6px; font-size: var(--font-size-base); }
+.rp-card p { margin: 0; font-size: var(--font-size-sm); line-height: 1.5; color: var(--text-body); }
+.rp-card .muted { margin-bottom: 8px; }
+.rp-strip { margin: 0; padding: 10px 14px; background: var(--surface-2); border: 1px solid var(--border); border-left: 3px solid var(--accent); border-radius: var(--radius-lg); font-size: var(--font-size-sm); line-height: 1.5; }
+.rp-two { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 380px), 1fr)); align-items: start; }
+
+/* authorization server pick and the honest-gaps box */
+.rp-as { display: flex; flex-wrap: wrap; gap: 6px 16px; align-items: center; margin: 0; padding: 8px 14px; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); }
+.rp-as legend { font-size: var(--font-size-2xs); font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); padding: 0 4px; }
+.rp-as input { width: auto; margin: 0; }
+.rp-pre { color: var(--muted); font-size: var(--font-size-2xs); font-weight: 400; }
+.rp-gaps { padding: 10px 14px; border: 1px dashed var(--border); border-radius: var(--radius-lg); background: var(--surface-2); font-size: var(--font-size-sm); }
+.rp-gaps ul { margin: 6px 0 0; padding-left: 18px; line-height: 1.5; }
+
+/* controls */
+.rp-controls { border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); padding: 10px 14px; }
+.rp-controls__main { margin: 0 0 6px; }
+.rp-fields { display: grid; gap: 0 12px; align-items: end; grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); }
+.rp-fields input, .rp-opts input[type="text"], .rp-opts select, .rp-opts input:not([type]) { width: 100%; }
+.rp-steps { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0 4px; }
+.rp-opts input[type="checkbox"] { width: auto; margin: 0 6px 0 0; }
+
+/* the calls: inspector-row style */
+.rp-calls { list-style: none; margin: 0; padding: 0; border: 1px solid var(--border); border-radius: var(--radius-lg); overflow: hidden; }
+.rp-call + .rp-call { border-top: 1px solid var(--border); }
+.rp-call details { margin: 0; background: var(--surface); }
+.rp-call__head { display: flex; gap: 10px; align-items: baseline; padding: 10px 14px; cursor: pointer; font-weight: 500; font-size: var(--font-size-sm); }
+.rp-call__head:hover { background: var(--surface-2); }
+.rp-method { font-family: var(--font-mono); font-weight: 800; font-size: var(--font-size-xs); color: var(--status-info); letter-spacing: 0.04em; }
+.rp-path { font-family: var(--font-mono); font-size: var(--font-size-sm); overflow-wrap: anywhere; min-width: 0; }
+.rp-status { margin-left: auto; font-family: var(--font-mono); font-weight: 700; font-size: var(--font-size-2xs); white-space: nowrap; color: var(--muted); }
+.rp-status--ok { color: var(--status-ok); }
+.rp-status--warn { color: var(--status-warn); }
+.rp-call__body { padding: 0 14px 12px; }
+.rp-note { border-left: 3px solid var(--accent); background: var(--surface-2); border-radius: 0 var(--radius-lg) var(--radius-lg) 0; padding: 8px 14px; margin: 6px 0 10px; }
+.rp-note__lbl { display: block; margin-bottom: 4px; font-size: var(--font-size-2xs); font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; color: var(--danger-text); }
+.rp-note p, .rp-note ol { margin: 0; font-size: var(--font-size-sm); line-height: 1.5; }
+.rp-note ol { padding-left: 18px; }
+.rp-note li { margin: 3px 0; }
+.rp-kv { display: grid; gap: 3px 12px; margin: 6px 0; font-family: var(--font-mono); font-size: var(--font-size-2xs); }
+.rp-kv div { display: grid; grid-template-columns: minmax(110px, max-content) 1fr; gap: 12px; }
+.rp-kv dt { color: var(--muted); }
+.rp-kv dd { margin: 0; overflow-wrap: anywhere; }
+.rp-raw { margin-top: 8px; }
+
+/* pager */
+.pager { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-top: 28px; padding-top: 14px; border-top: 1px solid var(--border); }
+.pager__dots { display: flex; gap: 6px; }
+.pager__dot { width: 22px; height: 22px; min-height: 22px; padding: 0; border-radius: 50%; background: var(--surface-2); }
+.pager__dot::after { content: ""; display: block; width: 9px; height: 9px; margin: auto; border-radius: 50%; background: var(--border); }
+.pager__dot[aria-current="page"]::after { background: var(--accent); }
+@media (max-width: 600px) { .pager { flex-wrap: wrap; } }

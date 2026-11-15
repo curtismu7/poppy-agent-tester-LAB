@@ -28,6 +28,7 @@ test('delegation: typ, iss, 24h cap, delegated key in cnf, verifies against the 
   const v = verifyEs256(delegation, agent.publicJwk);
   assert.ok(v.ok);
   assert.equal(v.header.typ, DELEGATION_TYP);
+  assert.equal(DELEGATION_TYP, 'poppy-delegation+jwt', 'spec 1.0 names the delegation type poppy-delegation+jwt');
   assert.equal(v.header.kid, 'a1');
   assert.equal(v.payload.iss, CLIENT);
   assert.deepEqual(v.payload.cnf.jwk, delegated.publicJwk);
@@ -47,7 +48,7 @@ test('session: signed by the delegated key, kid is its thumbprint, claims bind m
   assert.ok(v.ok);
   assert.equal(v.header.typ, SESSION_TYP);
   assert.equal(v.header.kid, jwkThumbprint(delegated.publicJwk));
-  assert.equal(v.header.pap_dlg, delegation);
+  assert.equal(v.header.poppy_dlg, delegation);
   assert.equal(v.payload.iss, CLIENT);
   assert.equal(v.payload.aud, ISSUER);
   assert.equal(v.payload.htm, 'GET');
@@ -57,7 +58,7 @@ test('session: signed by the delegated key, kid is its thumbprint, claims bind m
   // the session must NOT verify against the agent's own key: the delegated key signs it
   assert.equal(verifyEs256(session, agent.publicJwk).ok, false);
   // and the delegation inside it verifies against the agent key
-  assert.ok(verifyEs256(decodeJws(session).header.pap_dlg, agent.publicJwk).ok);
+  assert.ok(verifyEs256(decodeJws(session).header.poppy_dlg, agent.publicJwk).ok);
 });
 
 test('every session gets its own jti, and a tampered payload no longer verifies', () => {

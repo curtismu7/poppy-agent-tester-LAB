@@ -2,7 +2,7 @@
 
 You need three things: a PingFederate, a Company, and this app reachable over https.
 
-1. **Company.** Any server that serves `/.well-known/poppy.json` (with `organization.domain` equal to its host and `protocol_version` 0.3) and `/.well-known/oauth-protected-resource` (with `resource` equal to its origin), and an API that checks the bearer token and the `Poppy-Session` header. It must list this agent's `client.json` URL as an allowed agent.
+1. **Company.** Any server that serves `/.well-known/poppy.json` (with `organization.domain` equal to its host and `protocol_version` 1.0, or any 1.x) and `/.well-known/oauth-protected-resource` (with `resource` equal to its origin), and an API that checks the bearer token and the `Poppy-Session` header. It must list this agent's `client.json` URL as an allowed agent.
 2. **PingFederate.** Three objects, created through the admin API or console:
    - a **JWT access token manager** of its own, with its own signing key id, whose attribute contract includes `client_id` (and `sub`), with the `client_id` claim taken from the request's `ClientId` (a CONTEXT source) rather than a hardcoded value;
    - an **access token mapping** from your login adapter to that token manager that fulfils `client_id` from `CONTEXT / ClientId` and `sub` from the adapter's username;

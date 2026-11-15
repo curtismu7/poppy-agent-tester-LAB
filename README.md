@@ -4,7 +4,7 @@ Tier: Demo
 
 Repo: https://github.com/curtismu7/poppy-agent-tester-LAB
 
-Plays the personal agent from the Personal Agent Protocol (Poppy, Draft 0.3). You type a Company origin and a PingFederate issuer; the app reads the Company's `poppy.json`, signs in to the real PingFederate with a URL as its client id and PKCE, and calls the Company API with a signed `Poppy-Session`. Every request, token and signature is shown raw.
+Plays the personal agent from the Personal Agent Protocol (Poppy, spec 1.0). You type a Company origin and a PingFederate issuer; the app reads the Company's `poppy.json`, signs in to the real PingFederate with a URL as its client id and PKCE, and calls the Company API with a signed `Poppy-Session`. Every request, token and signature is shown raw.
 
 **What is real and what is not.** A local run talks to the real Company and the real PingFederate you name, and to nothing else. The hosted build (SE cluster) reaches nothing: it explains the flow and shows an example run with invented values.
 

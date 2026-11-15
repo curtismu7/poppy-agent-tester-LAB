@@ -30,7 +30,18 @@ before(async () => {
   const pfMeta = () => ({ issuer: originOf(pf), authorization_endpoint: `${originOf(pf)}/as/authorization.oauth2`, token_endpoint: `${originOf(pf)}/as/token.oauth2`, ...(seen.pfMetaOverride || {}) });
   pfApp.get('/.well-known/oauth-authorization-server', (_q, r) => r.json(pfMeta()));
   pfApp.get('/.well-known/openid-configuration', (_q, r) => r.json(pfMeta()));
-  pfApp.get('/as/authorization.oauth2', (q, r) => { seen.authorize = q.query; const iss = seen.redirectIss === undefined ? originOf(pf) : seen.redirectIss; r.redirect(`${q.query.redirect_uri}?code=CODE1&state=${encodeURIComponent(q.query.state)}${iss === null ? '' : `&iss=${encodeURIComponent(iss)}`}`); });
+  // RFC 9126: pushed requests are checked like the token request (client assertion), kept under a request_uri, and the authorize
+  // endpoint then reads them from there. seen.authorizeQuery is what the browser URL itself carried.
+  seen.pushed = new Map();
+  pfApp.post('/as/par.oauth2', express.urlencoded({ extended: false }), (q, r) => {
+    seen.parForms = [...(seen.parForms || []), q.body];
+    const a = verifyEs256(q.body.client_assertion || 'x.y.z', agentKey.publicJwk);
+    if (seen.parRefuse || !a.ok || a.header.typ !== 'client-authentication+jwt' || a.payload.aud !== originOf(pf)) return r.status(400).json({ error: 'invalid_client' });
+    const requestUri = `urn:ietf:params:oauth:request_uri:${crypto.randomBytes(8).toString('hex')}`;
+    seen.pushed.set(requestUri, q.body);
+    r.status(201).json({ request_uri: requestUri, expires_in: 60 });
+  });
+  pfApp.get('/as/authorization.oauth2', (q, r) => { seen.authorizeQuery = q.query; if (q.query.request_uri) { const p = seen.pushed.get(q.query.request_uri); if (!p || p.client_id !== q.query.client_id) return r.status(400).json({ error: 'invalid_request_uri' }); q = { query: p }; } seen.authorize = q.query; const iss = seen.redirectIss === undefined ? originOf(pf) : seen.redirectIss; r.redirect(`${q.query.redirect_uri}?code=CODE1&state=${encodeURIComponent(q.query.state)}${iss === null ? '' : `&iss=${encodeURIComponent(iss)}`}`); });
   pfApp.post('/as/token.oauth2', express.urlencoded({ extended: false }), (q, r) => {
     seen.tokenForms.push(q.body);
     const a = verifyEs256(q.body.client_assertion, agentKey.publicJwk);
@@ -43,7 +54,7 @@ before(async () => {
 
   // A fake Company: poppy.json, protected resource, and an API that records what it received.
   const coApp = express();
-  coApp.get('/.well-known/poppy.json', (_q, r) => r.json({ protocol_version: '0.3', organization: { domain: new URL(originOf(company)).hostname }, auth: { issuer: originOf(pf), scopes: { 'accounts:read': 'Read accounts' }, scope_hints: { 'accounts:read': { changes: 'none', personal_data: true } } } }));
+  coApp.get('/.well-known/poppy.json', (_q, r) => r.json({ protocol_version: '1.0', organization: { domain: new URL(originOf(company)).hostname }, auth: { issuer: originOf(pf), scopes: { 'accounts:read': 'Read accounts' }, scope_hints: { 'accounts:read': { changes: 'none', personal_data: true } } } }));
   coApp.get('/.well-known/oauth-protected-resource', (_q, r) => r.json({ resource: originOf(company), authorization_servers: [originOf(pf)] }));
   coApp.get('/poppy/api/v1/me', (q, r) => { seen.calls.push(q.headers); r.json({ user_id: 'person-1' }); });
   coApp.get('/poppy/api/v1/big', (_q, r) => r.type('text').send('x'.repeat(40 * 1024)));
@@ -99,8 +110,10 @@ test('full run: discover, authorize, redirect back, token, signed call', async (
   const sess = decodeJws(h['poppy-session']);
   assert.equal(sess.payload.htu, `${originOf(company)}/poppy/api/v1/me`);
   assert.equal(sess.payload.ath, crypto.createHash('sha256').update(h.authorization.slice(7)).digest('base64url'));
-  assert.ok(verifyEs256(h['poppy-session'], sess.header.pap_dlg && decodeJws(sess.header.pap_dlg).payload.cnf.jwk).ok);
-  assert.ok(verifyEs256(sess.header.pap_dlg, agentKey.publicJwk).ok);
+  assert.ok(verifyEs256(h['poppy-session'], sess.header.poppy_dlg && decodeJws(sess.header.poppy_dlg).payload.cnf.jwk).ok);
+  assert.ok(verifyEs256(sess.header.poppy_dlg, agentKey.publicJwk).ok);
+  assert.equal(h['poppy-version'], '1.0', 'spec 3.4: every request with the Session header declares the version');
+  assert.equal(decodeJws(sess.header.poppy_dlg).header.typ, 'poppy-delegation+jwt');
   assert.match(h.traceparent, /^00-[0-9a-f]{32}-[0-9a-f]{16}-01$/);
 });
 
@@ -147,7 +160,7 @@ test('the hosted build refuses every live endpoint', async () => {
   assert.equal((await r.json()).error, 'hosted_simulation');
   const sample = await (await fetch(`${originOf(s)}/api/sample`)).json();
   assert.equal(sample.example, true);
-  assert.equal(sample.steps.length, 4);
+  assert.equal(sample.steps.length, 5);
 });
 
 test('/api/health is demo-health/1 with runtime live', async () => {
@@ -376,7 +389,7 @@ test('a Company whose document is JSON null is a clean refusal, not a crash', as
 test('the default scope is accounts:read when advertised, not whatever is listed first', async () => {
   // A Company that lists an unrelated scope before accounts:read (a shared authorization server does this).
   const shared = express();
-  shared.get('/.well-known/poppy.json', (_q, r) => r.json({ protocol_version: '0.3', organization: { domain: new URL(originOf(shared_s)).hostname }, auth: { issuer: originOf(pf), scopes: { 'audit:read': 'Unrelated', 'accounts:read': 'Read accounts' }, scope_hints: { 'audit:read': { changes: 'none', personal_data: false }, 'accounts:read': { changes: 'none', personal_data: true } } } }));
+  shared.get('/.well-known/poppy.json', (_q, r) => r.json({ protocol_version: '1.0', organization: { domain: new URL(originOf(shared_s)).hostname }, auth: { issuer: originOf(pf), scopes: { 'audit:read': 'Unrelated', 'accounts:read': 'Read accounts' }, scope_hints: { 'audit:read': { changes: 'none', personal_data: false }, 'accounts:read': { changes: 'none', personal_data: true } } } }));
   shared.get('/.well-known/oauth-protected-resource', (_q, r) => r.json({ resource: originOf(shared_s), authorization_servers: [originOf(pf)] }));
   const shared_s = await listen(shared);
   const s = await listen(createApp({ agent: agentKey, baseUrl: `http://127.0.0.1:${agentPort}`, health: createHealth({ runChecks: async () => [], intervalMs: 3_600_000 }), fetchImpl: (...a) => fetch(...a) }));
@@ -440,4 +453,76 @@ test('rule 19: POST /api/mode switches mock↔real at runtime; exact body; 409 w
     assert.equal(hinfo.realAvailable, false);
     assert.match(hinfo.realReason, /Real mode is not available/);
   } finally { hs.close(); }
+});
+
+test('PAR (RFC 9126): when the issuer lists the endpoint the agent pushes the request with its client assertion and the browser URL carries only client_id and request_uri', async () => {
+  seen.pfMetaOverride = { pushed_authorization_request_endpoint: `${originOf(pf)}/as/par.oauth2` };
+  seen.parForms = [];
+  try {
+    const d = await (await post('/api/discover', { origin: originOf(company), issuer: originOf(pf) }, 'par1')).json();
+    assert.equal(d.checks.find((c) => c.id === 'par').ok, true);
+    assert.match(d.checks.find((c) => c.id === 'par').note, /pushes its sign-in request/);
+    const a = await (await post('/api/authorize', { scope: 'accounts:read', resource: true }, 'par1')).json();
+    assert.equal(a.par, true);
+    const u = new URL(a.url);
+    assert.deepEqual([...u.searchParams.keys()].sort(), ['client_id', 'request_uri']);
+    assert.equal(u.searchParams.get('client_id'), `http://127.0.0.1:${agentPort}/client.json`);
+    const form = seen.parForms.at(-1);
+    assert.equal(form.response_type, 'code');
+    assert.equal(form.code_challenge_method, 'S256');
+    assert.equal(form.scope, 'accounts:read');
+    assert.equal(form.resource, originOf(company));
+    assert.equal(form.client_assertion_type, 'urn:ietf:params:oauth:client-assertion-type:jwt-bearer');
+    assert.ok(!('client_secret' in form));
+    // the browser follows the thin URL; the sign-in still completes and the token is the agent's
+    const toPf = await fetch(a.url, { redirect: 'manual' });
+    assert.deepEqual([...Object.keys(seen.authorizeQuery)].sort(), ['client_id', 'request_uri']);
+    const cb = await fetch(toPf.headers.get('location'), { redirect: 'manual', headers: { 'x-workspace': 'par1' } });
+    assert.match(cb.headers.get('location'), /signin=ok/);
+    const st = await (await get('/api/state', 'par1')).json();
+    assert.equal(st.signedIn, true);
+    assert.deepEqual(st.steps.map((s) => s.kind), ['discover', 'par', 'authorize', 'token']);
+    assert.equal(st.steps[1].response.status, 201);
+  } finally { delete seen.pfMetaOverride; }
+});
+
+test('PAR: an issuer that lists no endpoint keeps the plain browser URL, and says so', async () => {
+  const d = await (await post('/api/discover', { origin: originOf(company), issuer: originOf(pf) }, 'par2')).json();
+  const par = d.checks.find((c) => c.id === 'par');
+  assert.equal(par.ok, true);
+  assert.match(par.note, /goes through the browser URL/);
+  const a = await (await post('/api/authorize', { scope: 'accounts:read' }, 'par2')).json();
+  assert.equal(a.par, false);
+  assert.equal(new URL(a.url).searchParams.has('request_uri'), false);
+});
+
+test('PAR: an issuer that requires it but lists no endpoint fails the check; a refused push is an error shown to the visitor, not a silent downgrade', async () => {
+  seen.pfMetaOverride = { require_pushed_authorization_requests: true };
+  try {
+    const d = await (await post('/api/discover', { origin: originOf(company), issuer: originOf(pf) }, 'par3')).json();
+    assert.equal(d.checks.find((c) => c.id === 'par').ok, false);
+    assert.equal(d.ok, false);
+  } finally { delete seen.pfMetaOverride; }
+  seen.pfMetaOverride = { pushed_authorization_request_endpoint: `${originOf(pf)}/as/par.oauth2` };
+  seen.parRefuse = true;
+  try {
+    await post('/api/discover', { origin: originOf(company), issuer: originOf(pf) }, 'par4');
+    const r = await post('/api/authorize', { scope: 'accounts:read' }, 'par4');
+    assert.equal(r.status, 502);
+    const j = await r.json();
+    assert.equal(j.error, 'par_failed');
+    assert.match(j.message, /HTTP 400, invalid_client/);
+    const st = await (await get('/api/state', 'par4')).json();
+    assert.equal(st.steps.at(-1).kind, 'par');
+    assert.equal(st.steps.at(-1).response.status, 400);
+  } finally { delete seen.pfMetaOverride; delete seen.parRefuse; }
+});
+
+test('PAR: an endpoint on another origin than the issuer is refused like the other two endpoints', async () => {
+  seen.pfMetaOverride = { pushed_authorization_request_endpoint: 'https://evil.example/par' };
+  try {
+    const r = await post('/api/discover', { origin: originOf(company), issuer: originOf(pf) }, 'par5');
+    assert.equal(r.status, 400);
+    assert.equal((await r.json()).error, 'endpoint_origin');
+  } finally { delete seen.pfMetaOverride; }
 });

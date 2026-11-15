@@ -11,9 +11,9 @@ import { createHealth } from './health.js';
 import { hostedFrom, baseUrlFrom, demoDefaultsFrom } from './config.js';
 import { createSessions } from './sessions.js';
 import { workspaceFrom } from './workspaces.js';
-import { discover, parseOrigin, fetchIssuerMetadata, DiscoverError } from './discover.js';
+import { discover, parseOrigin, fetchIssuerMetadata, DiscoverError, SUPPORTED_VERSION } from './discover.js';
 import { readClipped } from './body.js';
-import { newPkce, authorizationUrl, tokenRequest } from './oauth.js';
+import { newPkce, authorizationUrl, parAuthorizationUrl, parRequest, tokenRequest } from './oauth.js';
 import { clientMetadata, jwksDocument } from './agent.js';
 import { signDelegation, signSession } from './poppy.js';
 import { decodeJws } from './jose.js';
@@ -138,7 +138,7 @@ export function createApp({ configFile = CONFIG, agent, health = createHealth({ 
     if (!ws) return res.status(400).json({ error: 'bad_workspace' });
     res.set('Cache-Control', 'no-store');
     const r = sessions.get(ws);
-    res.json({ workspace: ws, config: r.config && { origin: r.config.origin, issuer: r.config.issuer, scope: r.config.scope }, discovery: r.discovery, signedIn: Boolean(r.token), token: r.token, steps: r.steps });
+    res.json({ workspace: ws, config: r.config && { origin: r.config.origin, issuer: r.config.issuer, scope: r.config.scope, parEndpoint: r.config.parEndpoint ?? null }, discovery: r.discovery, signedIn: Boolean(r.token), token: r.token, steps: r.steps });
   });
 
   // Step 1: read the Company's documents. The visitor types the Company origin and the issuer; the issuer must equal what the Company publishes.
@@ -158,13 +158,17 @@ export function createApp({ configFile = CONFIG, agent, health = createHealth({ 
     }
     const meta = im.meta;
     if (!meta?.authorization_endpoint || !meta?.token_endpoint) return res.status(400).json({ error: 'issuer_metadata', message: `${im.url} has no authorization_endpoint and token_endpoint`, discovery: brief });
-    for (const e of [meta.authorization_endpoint, meta.token_endpoint]) {
+    // RFC 9126: the endpoint where the authorization parameters are pushed. Same-origin rule as the other two endpoints.
+    const parEndpoint = typeof meta.pushed_authorization_request_endpoint === 'string' ? meta.pushed_authorization_request_endpoint : null;
+    const parRequired = meta.require_pushed_authorization_requests === true;
+    for (const e of [meta.authorization_endpoint, meta.token_endpoint, ...(parEndpoint ? [parEndpoint] : [])]) {
       let o = null; try { o = new URL(e).origin; } catch { /* not a URL */ }
       if (o !== issuer) return res.status(400).json({ error: 'endpoint_origin', message: 'Issuer metadata points at another origin; refused.', discovery: brief });
     }
     // protected_resources (spec 3): the issuer should list this resource. PingFederate has no setting for it, so it is shown as a warning, not hidden.
     const checks = [
       ...d.checks,
+      { id: 'par', ok: Boolean(parEndpoint) || !parRequired, note: parEndpoint ? `issuer metadata lists a pushed_authorization_request_endpoint (RFC 9126)${parRequired ? ' and requires it' : ''}: the agent pushes its sign-in request there and opens the authorization endpoint with only a request_uri` : parRequired ? 'issuer metadata says PAR is required but lists no pushed_authorization_request_endpoint' : 'issuer metadata lists no pushed_authorization_request_endpoint: the sign-in request goes through the browser URL' },
       { id: 'issuer_metadata', ok: meta.issuer === d.issuer, note: `${im.rfc8414 ? 'RFC 8414' : 'OpenID discovery'} metadata says issuer ${meta.issuer ?? 'missing'}; it must equal ${d.issuer}` },
       { id: 'protected_resources', level: 'warn', ok: Array.isArray(meta.protected_resources) && meta.protected_resources.includes(d.resource.resource), note: `issuer metadata lists protected_resources ${JSON.stringify(meta.protected_resources ?? null)}; the spec expects ${d.resource.resource} there (PingFederate has no setting for it: UNVERIFIED that clients need it)` },
     ];
@@ -172,7 +176,7 @@ export function createApp({ configFile = CONFIG, agent, health = createHealth({ 
     const rec = sessions.get(ws);
     rec.config = {
       origin, issuer, issuerClaim: d.issuer, resource: d.resource.resource, issParamRequired: meta.authorization_response_iss_parameter_supported === true,
-      authorizationEndpoint: meta.authorization_endpoint, tokenEndpoint: meta.token_endpoint, scope: defaultScope(Object.keys(d.poppy.auth?.scopes ?? {})),
+      authorizationEndpoint: meta.authorization_endpoint, tokenEndpoint: meta.token_endpoint, parEndpoint, scope: defaultScope(Object.keys(d.poppy.auth?.scopes ?? {})),
     };
     rec.discovery = { ok, checks, poppy: d.poppy, resource: d.resource };
     rec.token = null;
@@ -206,9 +210,30 @@ export function createApp({ configFile = CONFIG, agent, health = createHealth({ 
     rec.config.scope = scope;
     pendingByState.set(state, ws);
     if (pendingByState.size > 1000) pendingByState.delete(pendingByState.keys().next().value);
-    const url = authorizationUrl({ authorizationEndpoint: rec.config.authorizationEndpoint, clientId: `${baseUrl}/client.json`, redirectUri: redirectUri(), scope, state, challenge: pkce.challenge, resource: useResource ? rec.config.resource : undefined });
+    const clientId = `${baseUrl}/client.json`;
+    const resource = useResource ? rec.config.resource : undefined;
+    let url;
+    let pushed = false;
+    if (rec.config.parEndpoint) {
+      // RFC 9126 (spec 4.2: SHOULD whenever the issuer lists the endpoint): push the parameters with the client assertion, then
+      // open the authorization endpoint with only client_id and the request_uri. A refusal is shown, never quietly downgraded.
+      const par = parRequest({ parEndpoint: rec.config.parEndpoint, clientId, issuer: rec.config.issuerClaim, kid: agent.kid, signingKey: agent.privateKey, redirectUri: redirectUri(), scope, state, challenge: pkce.challenge, resource });
+      reach(par.url);
+      const r = await fetchImpl(par.url, { method: 'POST', headers: par.headers, body: par.body, redirect: 'manual', signal: AbortSignal.timeout(10000) });
+      const text = await readClipped(r, MAX_BODY);
+      let body; try { body = JSON.parse(text); } catch { body = text; }
+      sessions.log(ws, { kind: 'par', request: { method: 'POST', url: par.url, body: par.body }, response: { status: r.status, body } });
+      if (!r.ok || typeof body?.request_uri !== 'string') {
+        rec.pending = null; pendingByState.delete(state);
+        return res.status(502).json({ error: 'par_failed', message: `The issuer refused the pushed authorization request (HTTP ${r.status}${typeof body?.error === 'string' ? `, ${body.error.slice(0, 80)}` : ''}).` });
+      }
+      url = parAuthorizationUrl({ authorizationEndpoint: rec.config.authorizationEndpoint, clientId, requestUri: body.request_uri });
+      pushed = true;
+    } else {
+      url = authorizationUrl({ authorizationEndpoint: rec.config.authorizationEndpoint, clientId, redirectUri: redirectUri(), scope, state, challenge: pkce.challenge, resource });
+    }
     sessions.log(ws, { kind: 'authorize', request: { url } });
-    return res.json({ url, clientId: `${baseUrl}/client.json` });
+    return res.json({ url, clientId, par: pushed });
   }));
 
   // Step 3: call the Company with the token and a fresh Poppy-Session. The request and the response are returned raw.
@@ -226,7 +251,7 @@ export function createApp({ configFile = CONFIG, agent, health = createHealth({ 
     const trace = newTrace(req.headers.traceparent);
     const tp = formatTraceparent(trace.traceId, trace.span());
     const callUrl = new URL(url);
-    const headers = { authorization: `Bearer ${rec.token.access_token}`, 'poppy-session': session, traceparent: tp, accept: 'application/json', 'x-forwarded-host': callUrl.host, 'x-forwarded-proto': callUrl.protocol.replace(':', '') };
+    const headers = { authorization: `Bearer ${rec.token.access_token}`, 'poppy-session': session, 'poppy-version': SUPPORTED_VERSION, traceparent: tp, accept: 'application/json', 'x-forwarded-host': callUrl.host, 'x-forwarded-proto': callUrl.protocol.replace(':', '') };
     reach(url);
     const r = await fetchImpl(url, { method: 'GET', headers, redirect: 'manual', signal: AbortSignal.timeout(10000) });
     const text = await readClipped(r, MAX_BODY);

@@ -74,6 +74,59 @@ describe("AtlasChat", () => {
     expect(screen.getAllByText(/could not read that Company/i).length).toBeGreaterThan(0);
   });
 
+  it("greets, says it is the guided script, and uses the deployment's defaults so the first chip is there on a fresh load", async () => {
+    mockApi();
+    render(<AtlasChat info={{ ...INFO, defaults: { origin: "https://company.example", issuer: "https://pf.example" }, chatAgent: { live: false, reason: "no_key" } }} resetSignal={0} />);
+    expect(screen.getByTestId("atlas-greeting").textContent).toMatch(/personal agent/);
+    expect(screen.getByTestId("atlas-mode").textContent).toMatch(/guided script/);
+    expect(screen.getByTestId("atlas-guided-note").textContent).toMatch(/ANTHROPIC_API_KEY/);
+    expect(screen.queryByTestId("atlas-input")).toBeNull();
+    const chip = await screen.findByTestId("atlas-chip-0");
+    expect(chip.textContent).toMatch(/size in stock/);
+  });
+
+  it("live mode: the person types, the server agent answers, its tool lights the arrow", async () => {
+    const LIVE = { ...INFO, chatAgent: { live: true, model: "claude-opus-5-5" } };
+    let state = STATE;
+    const sent = [];
+    globalThis.fetch = vi.fn((url, opts = {}) => {
+      if (url === "/api/diagram?name=poppy-flow") return json(DIAGRAM);
+      if (url === "/api/state") return json(state);
+      if (url === "/api/chat" && opts.method !== "POST") return json({ messages: [] });
+      if (url === "/api/chat") {
+        sent.push(JSON.parse(opts.body));
+        state = { ...STATE, discovery: { ok: true, checks: [] }, steps: [{ kind: "discover", request: { urls: ["u"] }, response: { checks: [] } }] };
+        return json({ reply: "They publish accounts:read.", tools: [{ name: "read_company", status: 200 }], signInUrl: null, messages: [{ who: "person", text: sent[0].text }, { who: "agent", text: "They publish accounts:read." }] });
+      }
+      return json({ error: "nope" }, 404);
+    });
+    render(<AtlasChat info={LIVE} resetSignal={0} />);
+    expect(screen.getByTestId("atlas-mode").textContent).toMatch(/Claude, live \(claude-opus-5-5\)/);
+    fireEvent.change(screen.getByTestId("atlas-input"), { target: { value: "Do they have my size?" } });
+    fireEvent.click(screen.getByTestId("atlas-send"));
+    await waitFor(() => expect(screen.getByText("They publish accounts:read.")).toBeInTheDocument());
+    expect(sent).toEqual([{ text: "Do they have my size?" }]);
+    expect(screen.getByTestId("atlas-step-discover")).toBeInTheDocument();
+    expect(screen.getByTestId("pattern-page-now").textContent).toMatch(/Arrow 1/);
+    // Once the Company is read, the suggestion moves on to the order question.
+    expect((await screen.findByTestId("atlas-chip-0")).textContent).toMatch(/order/);
+  });
+
+  it("live mode: a server refusal puts the text back and shows the message", async () => {
+    globalThis.fetch = vi.fn((url, opts = {}) => {
+      if (url === "/api/diagram?name=poppy-flow") return json(DIAGRAM);
+      if (url === "/api/state") return json(STATE);
+      if (url === "/api/chat" && opts.method !== "POST") return json({ messages: [] });
+      if (url === "/api/chat") return json({ error: "model_error", message: "The model is rate limited (429)." }, 502);
+      return json({ error: "nope" }, 404);
+    });
+    render(<AtlasChat info={{ ...INFO, chatAgent: { live: true, model: "m" } }} resetSignal={0} />);
+    fireEvent.change(screen.getByTestId("atlas-input"), { target: { value: "hello" } });
+    fireEvent.click(screen.getByTestId("atlas-send"));
+    await waitFor(() => expect(screen.getByTestId("atlas-msg").textContent).toMatch(/429/));
+    expect(screen.getByTestId("atlas-input").value).toBe("hello");
+  });
+
   it("offers the call chip once signed in and shows the raw step detail on click", async () => {
     const token = "T".repeat(8);
     const callStep = { kind: "call", request: { method: "GET", url: "https://company.example/poppy/api/v1/me" }, response: { status: 200, body: { user_id: "person-1", session_id: "sid", scopes: ["accounts:read"] } } };

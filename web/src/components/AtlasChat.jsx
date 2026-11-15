@@ -1,6 +1,7 @@
 // Atlas-style chat: a phone-style conversation on the left, the protocol arrows it caused on the right.
-// The chips call the same real API as the Run it tab (discover, authorize, call); nothing is simulated here
-// beyond the scripted chat lines themselves, which say what the real requests did.
+// Two modes. With a model key on the server (info.chatAgent.live) the agent is Claude: the person types, and the agent's tools are
+// the same real steps as the Run it tab. Without one it is a guided script: the chips run those steps and the agent lines are
+// scripted sentences filled with what the real requests returned. Either way every arrow on the right is a real request.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getJson, postJson } from "../api";
 import Json, { POPPY_HOT } from "./Json";
@@ -12,6 +13,10 @@ const SPEC = "https://personalagentprotocol.org/docs/0.4/spec";
 // The arrow each protocol step highlights on the diagram (indexes into the poppy-flow edges, in order).
 // discover highlights arrow 0, sign-in arrows 2-3, call arrows 4-5.
 const STEP_ARROW = { discover: 0, authorize: 2, token: 3, call: 4 };
+const TOOL_ARROW = { read_company: 0, start_sign_in: 2, call_company_api: 5 };
+
+const GREETING_LIVE = "Hi, I'm your personal agent, running on Claude. Ask me about the Company: what's in stock, or where your order is. Every request I make shows up on the right.";
+const GREETING_GUIDED = "Hi, I'm your personal agent. Pick a question below and I'll make the real requests to answer it; each one shows up on the right.";
 
 // One scripted conversation line per real step kind. personLine is what the user "said"; agentLine is what
 // the agent answers once the step completes. They reference real values from the run, never invented ones.
@@ -93,6 +98,9 @@ export default function AtlasChat({ info, resetSignal }) {
   const [activeArrow, setActiveArrow] = useState(-1);
   const [diagram, setDiagram] = useState(null);
   const chatEnd = useRef(null);
+  const live = Boolean(info?.chatAgent?.live);
+  const [draft, setDraft] = useState("");
+  const [busy, setBusy] = useState(false);
 
   useEffect(() => { getJson("/api/diagram?name=poppy-flow").then(setDiagram, () => setDiagram(null)); }, []);
   useEffect(() => { chatEnd.current?.scrollIntoView({ behavior: "smooth" }); }, [chat]);
@@ -100,12 +108,31 @@ export default function AtlasChat({ info, resetSignal }) {
   const refresh = useCallback(() => getJson("/api/state").then((s) => {
     setState(s);
     if (s.config) { setOrigin((v) => v || s.config.origin); setIssuer((v) => v || s.config.issuer); }
+    // Same one-click defaults as the Run it tab: the deployment names its own Company and issuer.
+    else if (info?.defaults?.origin) { setOrigin((v) => v || info.defaults.origin); setIssuer((v) => v || info.defaults.issuer); }
     // A workspace with real progress resumes the conversation where it is; an untouched one stays idle.
     setPhase((p) => (p === "idle" && s.discovery ? (s.signedIn ? "signed-in" : "discovered") : p));
-  }, () => setState(null)), []);
+  }, () => setState(null)), [info]);
   useEffect(() => { refresh(); }, [refresh, resetSignal]);
+  // Live mode: the conversation lives on the server (per workspace), so it survives the round trip to PingFederate.
+  useEffect(() => { if (live) getJson("/api/chat").then((r) => setChat(r.messages ?? []), () => {}); else setChat([]); }, [live, resetSignal]);
 
   const say = (who, text) => setChat((c) => [...c, { who, text }]);
+
+  const send = async (text) => {
+    const t = text.trim();
+    if (!t || busy) return;
+    setMsg(""); setBusy(true); setDraft("");
+    setChat((c) => [...c, { who: "person", text: t }]);
+    const r = await postJson("/api/chat", { text: t });
+    setBusy(false);
+    await refresh();
+    if (!r.ok) { setChat((c) => c.slice(0, -1)); setDraft(t); setMsg(r.body.message ?? r.body.error ?? `HTTP ${r.status}`); return; }
+    setChat(r.body.messages ?? []);
+    const lastTool = [...(r.body.tools ?? [])].reverse().find((x) => x.name in TOOL_ARROW);
+    if (lastTool) setActiveArrow(TOOL_ARROW[lastTool.name]);
+    if (r.body.signInUrl) window.location.assign(r.body.signInUrl);
+  };
   const ready = info && !info.hosted;
   const scopes = scopeNames(state);
   const signedIn = Boolean(state?.signedIn);
@@ -156,7 +183,14 @@ export default function AtlasChat({ info, resetSignal }) {
   }, [state?.signedIn]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const chips = [];
-  if (phase === "idle") {
+  if (live) {
+    // Suggestions only: the person can type anything.
+    const ask = (label) => chips.push({ label, onClick: () => send(label), disabled: busy });
+    if (!state?.discovery) ask("Do they have my size in stock?");
+    else if (!signedIn) ask("Where's my order?");
+    else ask("I'm signed in. So, where is it?");
+  }
+  else if (phase === "idle") {
     if (origin && issuer) chips.push({ label: "Do they have my size in stock?", onClick: runDiscover });
     // else: the hint below explains where to type the origins
   }
@@ -168,13 +202,23 @@ export default function AtlasChat({ info, resetSignal }) {
   return (
     <div className="atlas" data-testid="atlas-chat">
       <section className="atlas-phone" aria-label="Chat with your personal agent">
-        <div className="atlas-phone__head"><span className="atlas-avatar" aria-hidden>A</span> Agent</div>
+        <div className="atlas-phone__head"><span className="atlas-avatar" aria-hidden>A</span> Agent <span className="atlas-mode" data-testid="atlas-mode">{live ? `· Claude, live (${info.chatAgent.model})` : "· guided script"}</span></div>
         <div className="atlas-phone__chat">
+          <p className="atlas-bubble atlas-bubble--agent" data-testid="atlas-greeting">{live ? GREETING_LIVE : GREETING_GUIDED}</p>
           {chat.map((c, i) => (
             <p key={i} className={`atlas-bubble atlas-bubble--${c.who}`}>{c.text}</p>
           ))}
+          {busy && <p className="atlas-bubble atlas-bubble--agent muted" data-testid="atlas-typing">…thinking</p>}
           <div ref={chatEnd} />
         </div>
+        {live && (
+          <form className="atlas-input" onSubmit={(e) => { e.preventDefault(); send(draft); }}>
+            <label htmlFor="atlas-text" className="sr-only">Message your agent</label>
+            <input id="atlas-text" data-testid="atlas-input" value={draft} onChange={(e) => setDraft(e.target.value)} maxLength={500} placeholder="Ask your agent…" autoComplete="off" disabled={busy} />
+            <button type="submit" data-testid="atlas-send" disabled={busy || !draft.trim()}>Send</button>
+          </form>
+        )}
+        {!live && info && !info.hosted && <p className="muted atlas-note" data-testid="atlas-guided-note">Guided script: set ANTHROPIC_API_KEY on the server to talk to a live Claude agent.</p>}
         <div className="atlas-chips" role="group" aria-label="Things to try">
           {chips.length
             ? chips.map((c, i) => <button key={i} type="button" data-testid={`atlas-chip-${i}`} onClick={c.onClick} disabled={c.disabled}>{c.label}</button>)

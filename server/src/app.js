@@ -24,6 +24,7 @@ import { loadCast, verticalFrom, VERTICALS } from './cast.js';
 import { buildStory } from './story.js';
 import { buildSample } from './sample.js';
 import { shelfInfo } from './shelfLink.js';
+import { chatTurn, MAX_TEXT } from './chatAgent.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const WEB_DIST = process.env.WEB_DIST || path.resolve(HERE, '../../web/dist');
@@ -36,7 +37,7 @@ const SCOPE_RE = /^[\x21\x23-\x5b\x5d-\x7e]+( [\x21\x23-\x5b\x5d-\x7e]+)*$/;
 
 const safePath = (p) => typeof p === 'string' && /^\/[A-Za-z0-9._~!$&'()*+,;=:@%/-]*$/.test(p) && !p.includes('//') && !p.split('/').includes('..');
 
-export function createApp({ configFile = CONFIG, agent, health = createHealth({ runtime: hostedFrom() ? 'offline' : 'live' }), hosted = hostedFrom(), baseUrl = baseUrlFrom(), sessions = createSessions(), fetchImpl = (...a) => globalThis.fetch(...a), proxyHosts = new Set() } = {}) {
+export function createApp({ configFile = CONFIG, agent, health = createHealth({ runtime: hostedFrom() ? 'offline' : 'live' }), hosted = hostedFrom(), baseUrl = baseUrlFrom(), sessions = createSessions(), fetchImpl = (...a) => globalThis.fetch(...a), proxyHosts = new Set(), chat = null } = {}) {
   // Rule 19: the mode is a mutable holder so POST /api/mode can switch at runtime. Every gate below reads
   // holder.hosted. A hosted build cannot switch to real: realAvailable is false there (no agent config), so it fails closed.
   const holder = { hosted };
@@ -113,7 +114,9 @@ export function createApp({ configFile = CONFIG, agent, health = createHealth({ 
   api.get('/info', (_req, res) => { res.set('Cache-Control', 'no-store'); res.json({ hosted: holder.hosted, simulated: holder.hosted, agentClientId: baseUrl ? `${baseUrl}/client.json` : null, configured: !ready(),
       source: holder.hosted ? 'mock' : 'real', realAvailable: realAvailable(),
       realReason: realAvailable() ? null : 'Real mode is not available: give the server the Company and PingFederate settings (agent key and base URL).',
-      defaults: demoDefaultsFrom() }); });
+      defaults: demoDefaultsFrom(),
+      // The chat tab's live agent: on when the server has a model key (never returned) and the build is not hosted.
+      chatAgent: chat && !holder.hosted ? { live: true, model: chat.model } : { live: false, reason: holder.hosted ? 'hosted' : 'no_key' } }); });
   // customer.config.json is read on every request so editing it shows up on reload (rule 12).
   api.get('/story', (req, res) => { res.set('Cache-Control', 'no-store'); res.json({ ...buildStory(loadCast(configFile, verticalFrom(req.query.vertical))), verticals: Object.keys(VERTICALS) }); });
   // An example run (invented values, real shape): what the hosted build shows instead of reaching a real Company.
@@ -127,11 +130,9 @@ export function createApp({ configFile = CONFIG, agent, health = createHealth({ 
     const ws = workspaceFrom(req);
     if (!ws) return res.status(400).json({ error: 'bad_workspace' });
     res.set('Cache-Control', 'no-store');
-    try { return await handler(ws, req, res); } catch (e) {
-      if (e instanceof DiscoverError) return res.status(400).json({ error: e.code, message: e.message });
-      return res.status(502).json({ error: 'upstream', message: String(e.message).slice(0, 200) });
-    }
+    try { return await handler(ws, req, res); } catch (e) { const f = failure(e); return res.status(f.status).json(f.body); }
   };
+  const failure = (e) => (e instanceof DiscoverError ? { status: 400, body: { error: e.code, message: e.message } } : { status: 502, body: { error: 'upstream', message: String(e.message).slice(0, 200) } });
 
   api.get('/state', (req, res) => {
     const ws = workspaceFrom(req);
@@ -142,7 +143,7 @@ export function createApp({ configFile = CONFIG, agent, health = createHealth({ 
   });
 
   // Step 1: read the Company's documents. The visitor types the Company origin and the issuer; the issuer must equal what the Company publishes.
-  api.post('/discover', live(async (ws, req, res) => {
+  const discoverStep = async (ws, req, res) => {
     const { origin: typed, issuer: typedIssuer } = req.body || {};
     const origin = parseOrigin(typed);
     const issuer = parseOrigin(typedIssuer);
@@ -181,10 +182,11 @@ export function createApp({ configFile = CONFIG, agent, health = createHealth({ 
     rec.discovery = { ok, checks, poppy: d.poppy, resource: d.resource };
     rec.token = null;
     return res.json({ ok, checks, poppy: d.poppy, resource: d.resource, issuer: { authorization_endpoint: meta.authorization_endpoint, token_endpoint: meta.token_endpoint } });
-  }, { needsAgent: false }));
+  };
+  api.post('/discover', live(discoverStep, { needsAgent: false }));
 
   // Step 2: build the authorization URL (PKCE, state). The browser follows it; the redirect comes back to /cb.
-  api.post('/authorize', live(async (ws, req, res) => {
+  const authorizeStep = async (ws, req, res) => {
     const rec = sessions.get(ws);
     if (!rec.config) return res.status(409).json({ error: 'discover_first' });
     const scope = String(req.body?.scope || rec.config.scope).trim();
@@ -234,10 +236,11 @@ export function createApp({ configFile = CONFIG, agent, health = createHealth({ 
     }
     sessions.log(ws, { kind: 'authorize', request: { url } });
     return res.json({ url, clientId, par: pushed });
-  }));
+  };
+  api.post('/authorize', live(authorizeStep));
 
   // Step 3: call the Company with the token and a fresh Poppy-Session. The request and the response are returned raw.
-  api.post('/call', live(async (ws, req, res) => {
+  const callStep = async (ws, req, res) => {
     const rec = sessions.get(ws);
     if (!rec.token) return res.status(409).json({ error: 'sign_in_first' });
     const p = req.body?.path ?? '/poppy/api/v1/me';
@@ -259,7 +262,56 @@ export function createApp({ configFile = CONFIG, agent, health = createHealth({ 
     const step = { kind: 'call', request: { method: 'GET', url, headers, session: { header: decodeJws(session)?.header, payload: decodeJws(session)?.payload }, delegation: decodeJws(delegation) }, response: { status: r.status, body } };
     sessions.log(ws, step);
     return res.json({ ...step, traceId: trace.traceId });
-  }));
+  };
+  api.post('/call', live(callStep));
+
+  // The chat tab's live agent. Each tool runs one of the three steps above through the same handler, with the same checks and log,
+  // so a chat run and a Run it run leave the same trail. The Company and issuer are the workspace's, else the deployment defaults.
+  const runStep = async (handler, ws, req, body, { needsAgent = true } = {}) => {
+    if (needsAgent && ready()) return { status: 503, body: { error: ready() } };
+    const out = { status: 200, body: null };
+    const res = { status(c) { out.status = c; return this; }, json(b) { out.body = b; return this; }, set() { return this; } };
+    try { await handler(ws, Object.create(req, { body: { value: body, enumerable: true } }), res); } catch (e) { Object.assign(out, failure(e)); }
+    return out;
+  };
+  const chatTool = (ws, req) => async (name, input) => {
+    const rec = sessions.get(ws);
+    if (name === 'read_company') {
+      const d = demoDefaultsFrom();
+      const origin = rec.config?.origin || d.origin; const issuer = rec.config?.issuer || d.issuer;
+      if (!origin || !issuer) return { status: 409, body: { error: 'no_company', message: 'No Company is set: type it on the Run it tab, or set PAT_DEMO_COMPANY_ORIGIN and PAT_DEMO_PF_ISSUER.' } };
+      return runStep(discoverStep, ws, req, { origin, issuer }, { needsAgent: false });
+    }
+    if (name === 'start_sign_in') return runStep(authorizeStep, ws, req, {});
+    if (name === 'call_company_api') return runStep(callStep, ws, req, { path: typeof input.path === 'string' ? input.path : '/poppy/api/v1/me' });
+    return { status: 400, body: { error: 'unknown_tool' } };
+  };
+  const chatView = (rec) => rec.chatLog ?? [];
+  api.get('/chat', (req, res) => {
+    const ws = workspaceFrom(req);
+    if (!ws) return res.status(400).json({ error: 'bad_workspace' });
+    res.set('Cache-Control', 'no-store');
+    return res.json({ messages: chatView(sessions.get(ws)) });
+  });
+  api.post('/chat', live(async (ws, req, res) => {
+    if (!chat) return res.status(503).json({ error: 'chat_not_configured', message: 'Set ANTHROPIC_API_KEY in .env and restart to talk to a live agent. The guided chat works without it.' });
+    const text = req.body?.text;
+    if (typeof text !== 'string' || !text.trim() || text.length > MAX_TEXT) return res.status(400).json({ error: 'bad_text', message: `Send {"text": "..."} of 1 to ${MAX_TEXT} characters.` });
+    const rec = sessions.get(ws);
+    if (rec.chatBusy) return res.status(409).json({ error: 'busy', message: 'The agent is still answering the last message.' });
+    rec.chatBusy = true;
+    rec.chat ??= []; rec.chatLog ??= [];
+    const before = rec.chat.length;
+    try {
+      const out = await chatTurn({ client: chat.client, model: chat.model, history: rec.chat, text: text.trim(), runTool: chatTool(ws, req) });
+      rec.chatLog = [...rec.chatLog, { who: 'person', text: text.trim() }, { who: 'agent', text: out.reply, tools: out.tools }].slice(-40);
+      return res.json({ reply: out.reply, tools: out.tools, signInUrl: out.signInUrl, messages: rec.chatLog });
+    } catch (e) {
+      rec.chat.length = Math.min(rec.chat.length, before); // a failed turn leaves no half-finished tool exchange behind
+      const status = typeof e?.status === 'number' ? e.status : 0;
+      return res.status(502).json({ error: 'model_error', message: status === 401 ? 'The model key was refused (401). Check ANTHROPIC_API_KEY.' : status === 429 ? 'The model is rate limited (429). Try again in a moment.' : `The model call failed${status ? ` (HTTP ${status})` : ''}.` });
+    } finally { rec.chatBusy = false; }
+  }, { needsAgent: false }));
 
   api.post('/reset', (req, res) => {
     const ws = workspaceFrom(req);

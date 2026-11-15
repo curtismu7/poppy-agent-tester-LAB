@@ -89,6 +89,10 @@ input { width: 100%; display: block; margin: 4px 0 8px; }
 .atlas-bubble--agent { align-self: flex-start; background: var(--surface-2); border: 1px solid var(--border); }
 .atlas-chips { display: flex; flex-wrap: wrap; gap: 6px; padding: 10px 12px; border-top: 1px solid var(--border); }
 .atlas-chips button { font-size: var(--font-size-2xs); }
+.atlas-mode { font-weight: 400; font-size: var(--font-size-2xs); opacity: 0.85; }
+.atlas-input { display: flex; gap: 6px; padding: 10px 12px; border-top: 1px solid var(--border); }
+.atlas-input input { flex: 1; min-width: 0; }
+.atlas-note { margin: 0; padding: 0 12px 10px; font-size: var(--font-size-2xs); }
 .atlas-flow { min-width: 0; display: flex; flex-direction: column; gap: 10px; }
 .atlas-steps { list-style: none; margin: 0; padding: 0; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); }
 .atlas-step { border-bottom: 1px solid var(--border); }

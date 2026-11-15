@@ -74,6 +74,60 @@ describe("AtlasChat", () => {
     expect(screen.getAllByText(/could not read that Company/i).length).toBeGreaterThan(0);
   });
 
+  it("guided: with no defaults, the Company typed above the chat brings up the first chip and is what discover reads", async () => {
+    const sent = [];
+    let state = STATE;
+    globalThis.fetch = vi.fn((url, opts = {}) => {
+      if (url === "/api/diagram?name=poppy-flow") return json(DIAGRAM);
+      if (url === "/api/state") return json(state);
+      if (opts.method === "POST" && url === "/api/discover") {
+        sent.push(JSON.parse(opts.body));
+        state = { ...STATE, config: { origin: "https://company.example", issuer: "https://pf.example" }, discovery: { ok: true, checks: [], poppy: { auth: { scopes: { "accounts:read": "Read" } } } }, steps: [{ kind: "discover", request: { urls: ["u"] }, response: { checks: [] } }] };
+        return json({ ok: true, checks: [] });
+      }
+      return json({ error: "nope" }, 404);
+    });
+    render(<AtlasChat info={INFO} resetSignal={0} />);
+    await screen.findByText(/Type the Company origin and the PingFederate issuer above/);
+    expect(screen.queryByTestId("atlas-chip-0")).toBeNull();
+    fireEvent.change(screen.getByTestId("atlas-origin"), { target: { value: " https://company.example " } });
+    expect(screen.queryByTestId("atlas-chip-0")).toBeNull(); // one box is not enough
+    fireEvent.change(screen.getByTestId("atlas-issuer"), { target: { value: "https://pf.example" } });
+    fireEvent.click(screen.getByTestId("atlas-chip-0"));
+    await waitFor(() => expect(screen.getByTestId("atlas-step-discover")).toBeInTheDocument());
+    expect(sent).toEqual([{ origin: "https://company.example", issuer: "https://pf.example" }]);
+    // The agent line names what was just read, not the empty state from before the click.
+    expect(screen.getByText(/company\.example's documents: accounts:read, sign-in at pf\.example/)).toBeInTheDocument();
+    // Once read, the boxes go away and the next question is offered.
+    expect(screen.queryByTestId("atlas-company")).toBeNull();
+    expect(screen.getByTestId("atlas-chip-0").textContent).toMatch(/order/);
+  });
+
+  it("the hosted build shows no Company boxes and says why", async () => {
+    mockApi();
+    render(<AtlasChat info={{ ...INFO, hosted: true }} resetSignal={0} />);
+    await screen.findByText(/hosted build cannot reach a Company/);
+    expect(screen.queryByTestId("atlas-company")).toBeNull();
+  });
+
+  it("live mode: before the Company is read, the typed Company goes with the message", async () => {
+    const sent = [];
+    globalThis.fetch = vi.fn((url, opts = {}) => {
+      if (url === "/api/diagram?name=poppy-flow") return json(DIAGRAM);
+      if (url === "/api/state") return json(STATE);
+      if (url === "/api/chat" && opts.method !== "POST") return json({ messages: [] });
+      if (url === "/api/chat") { sent.push(JSON.parse(opts.body)); return json({ reply: "ok", tools: [], signInUrl: null, messages: [] }); }
+      return json({ error: "nope" }, 404);
+    });
+    render(<AtlasChat info={{ ...INFO, chatAgent: { live: true, model: "m" } }} resetSignal={0} />);
+    fireEvent.change(await screen.findByTestId("atlas-origin"), { target: { value: "https://company.example" } });
+    fireEvent.change(screen.getByTestId("atlas-issuer"), { target: { value: "https://pf.example" } });
+    fireEvent.change(screen.getByTestId("atlas-input"), { target: { value: "In stock?" } });
+    fireEvent.click(screen.getByTestId("atlas-send"));
+    await waitFor(() => expect(sent.length).toBe(1));
+    expect(sent[0]).toEqual({ text: "In stock?", origin: "https://company.example", issuer: "https://pf.example" });
+  });
+
   it("greets, says it is the guided script, and uses the deployment's defaults so the first chip is there on a fresh load", async () => {
     mockApi();
     render(<AtlasChat info={{ ...INFO, defaults: { origin: "https://company.example", issuer: "https://pf.example" }, chatAgent: { live: false, reason: "no_key" } }} resetSignal={0} />);

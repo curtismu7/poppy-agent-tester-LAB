@@ -114,7 +114,8 @@ export default function AtlasChat({ info, resetSignal }) {
     else if (info?.defaults?.origin) { setOrigin((v) => v || info.defaults.origin); setIssuer((v) => v || info.defaults.issuer); }
     // A workspace with real progress resumes the conversation where it is; an untouched one stays idle.
     setPhase((p) => (p === "idle" && s.discovery ? (s.signedIn ? "signed-in" : "discovered") : p));
-  }, () => setState(null)), [info]);
+    return s;
+  }, () => { setState(null); return null; }), [info]);
   useEffect(() => { refresh(); }, [refresh, resetSignal]);
   // Live mode: the conversation lives on the server (per workspace), so it survives the round trip to PingFederate.
   useEffect(() => { if (live) getJson("/api/chat").then((r) => setChat(r.messages ?? []), () => {}); else setChat([]); }, [live, resetSignal]);
@@ -126,7 +127,9 @@ export default function AtlasChat({ info, resetSignal }) {
     if (!t || busy) return;
     setMsg(""); setBusy(true); setDraft("");
     setChat((c) => [...c, { who: "person", text: t }]);
-    const r = await postJson("/api/chat", { text: t });
+    // Before the Company is read, the agent reads the one typed above the chat.
+    const company = !state?.discovery && origin.trim() && issuer.trim() ? { origin: origin.trim(), issuer: issuer.trim() } : {};
+    const r = await postJson("/api/chat", { text: t, ...company });
     setBusy(false);
     await refresh();
     if (!r.ok) { setChat((c) => c.slice(0, -1)); setDraft(t); setMsg(r.body.message ?? r.body.error ?? `HTTP ${r.status}`); return; }
@@ -146,11 +149,11 @@ export default function AtlasChat({ info, resetSignal }) {
   const runDiscover = async () => {
     setMsg(""); setPhase("discover"); highlight("discover");
     say("person", SCRIPT.discover.person);
-    const r = await postJson("/api/discover", { origin, issuer });
-    await refresh();
-    if (!r.ok) { setPhase("idle"); setMsg(r.body.message ?? r.body.error ?? `HTTP ${r.status}`); say("agent", "I could not read that Company. Check the origins on the Run it tab."); return; }
+    const r = await postJson("/api/discover", { origin: origin.trim(), issuer: issuer.trim() });
+    const fresh = await refresh();
+    if (!r.ok) { setPhase("idle"); setMsg(r.body.message ?? r.body.error ?? `HTTP ${r.status}`); say("agent", "I could not read that Company. Check the Company origin and the issuer above the chat."); return; }
     setActiveArrow(0);
-    say("agent", SCRIPT.discover.agentLine(state));
+    say("agent", SCRIPT.discover.agentLine(fresh));
     setPhase("discovered");
   };
 
@@ -193,8 +196,8 @@ export default function AtlasChat({ info, resetSignal }) {
     else ask("I'm signed in. So, where is it?");
   }
   else if (phase === "idle") {
-    if (origin && issuer) chips.push({ label: "Do they have my size in stock?", onClick: runDiscover });
-    // else: the hint below explains where to type the origins
+    if (origin.trim() && issuer.trim()) chips.push({ label: "Do they have my size in stock?", onClick: runDiscover });
+    // else: the hint below says to fill the two boxes above it
   }
   else if (phase === "discovered" && !signedIn) chips.push({ label: "Where's my order?", onClick: runSignIn, disabled: !info?.configured });
   else if (phase === "signed-in") chips.push({ label: "So — where is it?", onClick: runCall });
@@ -221,10 +224,19 @@ export default function AtlasChat({ info, resetSignal }) {
           </form>
         )}
         {!live && info && !info.hosted && <p className="muted atlas-note" data-testid="atlas-guided-note">Guided script: set ANTHROPIC_API_KEY on the server to talk to a live Claude agent.</p>}
+        {ready && !state?.discovery && (
+          <fieldset className="atlas-company" data-testid="atlas-company" disabled={busy || phase === "discover"}>
+            <legend>Which Company?</legend>
+            <label htmlFor="atlas-origin">Company origin</label>
+            <input id="atlas-origin" data-testid="atlas-origin" value={origin} onChange={(e) => setOrigin(e.target.value)} placeholder="https://company.example" maxLength={300} autoComplete="off" spellCheck={false} />
+            <label htmlFor="atlas-issuer">PingFederate issuer</label>
+            <input id="atlas-issuer" data-testid="atlas-issuer" value={issuer} onChange={(e) => setIssuer(e.target.value)} placeholder="https://pf.example:9031" maxLength={300} autoComplete="off" spellCheck={false} />
+          </fieldset>
+        )}
         <div className="atlas-chips" role="group" aria-label="Things to try">
           {chips.length
             ? chips.map((c, i) => <button key={i} type="button" data-testid={`atlas-chip-${i}`} onClick={c.onClick} disabled={c.disabled}>{c.label}</button>)
-            : <p className="muted" data-testid="atlas-hint">Type the Company origin and the PingFederate issuer on the Run it tab first; the chat reuses them.</p>}
+            : <p className="muted" data-testid="atlas-hint">{info?.hosted ? "This hosted build cannot reach a Company. Run the standalone to chat with the agent." : "Type the Company origin and the PingFederate issuer above; a question to ask appears here."}</p>}
         </div>
       </section>
 
@@ -233,7 +245,7 @@ export default function AtlasChat({ info, resetSignal }) {
         <ol className="atlas-steps">
           {steps.length
             ? steps.map((s, i) => <StepRow key={i} step={s} open={openStep === i} onOpen={() => setOpenStep(openStep === i ? null : i)} />)
-            : <li className="muted">Nothing yet. Pick a chip in the chat.</li>}
+            : <li className="muted">Nothing yet. Click a suggested question under the chat.</li>}
         </ol>
         {diagram && (
           <PatternDiagram

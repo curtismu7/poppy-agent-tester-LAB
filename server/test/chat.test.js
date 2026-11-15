@@ -94,6 +94,22 @@ test('a chat message runs read_company through the discover handler and returns 
   assert.deepEqual((await (await a.get('/api/chat', 'other')).json()).messages, []);
 });
 
+test('with no deployment defaults, read_company uses the Company typed above the chat; a malformed one is refused', async () => {
+  const saved = [process.env.PAT_DEMO_COMPANY_ORIGIN, process.env.PAT_DEMO_PF_ISSUER];
+  delete process.env.PAT_DEMO_COMPANY_ORIGIN; delete process.env.PAT_DEMO_PF_ISSUER;
+  try {
+    const client = scripted([toolUse('read_company'), say('none set'), toolUse('read_company'), say('Read it.')]);
+    const a = await startApp({ chat: { client, model: 'm' } });
+    const none = await (await a.post('/api/chat', { text: 'stock?' })).json();
+    assert.deepEqual(none.tools, [{ name: 'read_company', status: 409 }]);
+    assert.match(client.sent[1].messages.at(-1).content[0].content, /above the chat/);
+    for (const body of [{ text: 'x', origin: 5, issuer: originOf(pf) }, { text: 'x', origin: originOf(company), issuer: 'h'.repeat(301) }]) assert.equal((await a.post('/api/chat', body)).status, 400);
+    const b = await (await a.post('/api/chat', { text: 'stock?', origin: originOf(company), issuer: originOf(pf) })).json();
+    assert.deepEqual(b.tools, [{ name: 'read_company', status: 200 }]);
+    assert.equal((await (await a.get('/api/state')).json()).config.origin, originOf(company));
+  } finally { [process.env.PAT_DEMO_COMPANY_ORIGIN, process.env.PAT_DEMO_PF_ISSUER] = saved; }
+});
+
 test('start_sign_in hands the page the PingFederate URL; a call before sign-in comes back as an error result', async () => {
   const client = scripted([toolUse('call_company_api', { path: '/poppy/api/v1/me' }), toolUse('read_company'), toolUse('start_sign_in'), say('Off to PingFederate.')]);
   const a = await startApp({ chat: { client, model: 'm' } });

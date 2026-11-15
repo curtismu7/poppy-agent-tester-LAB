@@ -37,7 +37,7 @@ label.inline { display: inline-flex; margin-top: 0; font-weight: 400; }
 .seg { display: flex; flex-wrap: wrap; gap: 6px; }
 .seg button[aria-pressed="true"] { font-weight: 700; }
 .lesson { margin: 10px 0 0; line-height: 1.5; }
-.json { margin: 4px 0; padding: 10px; background: var(--surface-2); border-radius: var(--radius-md); font-family: var(--font-mono); font-size: var(--font-size-sm); overflow-x: auto; white-space: pre-wrap; overflow-wrap: anywhere; }
+.json { margin: 4px 0; padding: 10px; background: var(--surface-2); border-radius: var(--radius-md); font-family: var(--font-mono); font-size: var(--font-size-sm); white-space: pre-wrap; overflow-wrap: anywhere; }
 .tag { display: inline-block; padding: 1px 8px; border-radius: var(--radius-pill); border: 1px solid var(--border); background: var(--surface-2); font-size: var(--font-size-2xs); font-weight: 600; }
 .tag--ok { color: var(--status-ok); border-color: var(--status-ok); }
 .tag--warn { color: var(--status-warn); border-color: var(--status-warn); }

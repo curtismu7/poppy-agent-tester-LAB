@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import App, { BANNER_FAILED, BANNER_UNKNOWN } from "./App";
+import { setJsonView } from "./components/JsonPane";
 
 const json = (body, status = 200) => Promise.resolve({ ok: status < 400, status, json: () => Promise.resolve(body) });
 const STATE = { workspace: "w", config: null, discovery: null, signedIn: false, token: null, steps: [] };
@@ -19,7 +20,7 @@ function mockApi({ info = { hosted: false, configured: true, agentClientId: "htt
   });
 }
 
-beforeEach(() => { window.location.hash = ""; });
+beforeEach(() => { window.location.hash = ""; setJsonView("raw"); }); // the Form | JSON choice is shared module state: tests that read pane text say which view they read
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 
 describe("banner", () => {
@@ -122,6 +123,19 @@ describe("run it", () => {
     render(<App />);
     await waitFor(() => expect(screen.getByLabelText("Access token").textContent).toContain(evil));
     expect(document.querySelector("img")).toBeNull();
+  });
+  it("shows token claims through the shared pane: a Form | JSON toggle, the JSON text in full view", async () => {
+    mockApi({ state: { ...DISCOVERED, signedIn: true, token: { access_token: "opaque", claims: { sub: "person-1", scope: "accounts:read" } } } });
+    render(<App />);
+    const pane = await screen.findByLabelText("Token claims");
+    expect(pane.tagName).toBe("PRE");
+    expect(pane.textContent).toMatch(/"sub": "person-1"/);
+    const toggle = screen.getByRole("group", { name: "Token claims view" });
+    expect(Array.from(toggle.querySelectorAll("button"), (b) => b.textContent)).toEqual(["Form", "JSON"]);
+    fireEvent.click(toggle.querySelector("button"));
+    const form = screen.getByLabelText("Token claims");
+    expect(form.classList.contains("json--form")).toBe(true);
+    expect(form.textContent).toMatch(/person-1/);
   });
 });
 

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { getJson, postJson } from "../api";
-import Json from "./Json";
+import Json, { POPPY_HOT } from "./Json";
 
 const ERR = { issuer_mismatch: "The issuer you typed is not the one the Company publishes.", hosted_simulation: "This hosted build explains and shows an example run; run the standalone to reach a real Company.", agent_not_configured: "Set PAT_AGENT_BASE_URL to the https URL PingFederate can reach, then restart.", discover_first: "Read the Company first.", sign_in_first: "Sign in first." };
 // A server message that names the real values (the issuer the Company publishes, the host that failed) beats a generic one.
@@ -86,7 +86,7 @@ export default function RunPanel({ info, resetSignal }) {
         <section className="panel" aria-labelledby="example" data-testid="example-run">
           <h2 id="example">Example run</h2>
           <p className="muted">{sample.note}</p>
-          <Json value={sample.steps} label="Example run steps" />
+          <Json value={sample.steps} label="Example run steps" hot={POPPY_HOT} />
         </section>
       )}
       {info && !info.configured && !hosted && <p className="panel panel--warn" data-testid="not-configured">Sign-in and calls need PAT_AGENT_BASE_URL (the https URL PingFederate can reach for this agent). Reading the Company works without it.</p>}
@@ -117,7 +117,7 @@ export default function RunPanel({ info, resetSignal }) {
         <label className="inline" htmlFor="resource"><input id="resource" type="checkbox" checked={useResource} onChange={(e) => setUseResource(e.target.checked)} style={{ width: "auto", display: "inline", margin: "0 6px 0 0" }} />Send the Company as the resource (RFC 8707)</label>
         <p className="muted">Off by default: PingFederate answers 400 to a resource URI it has not registered. Turn it on for an issuer that accepts it.</p>
         <p><button type="button" onClick={signIn} disabled={off || busy !== "" || !state?.discovery || !scope} data-testid="signin">Sign in through PingFederate</button></p>
-        {state?.token && (<><h3>Access token (raw, from PingFederate)</h3><Json value={state.token.access_token} label="Access token" /><h3>Decoded claims</h3><Json value={state.token.claims} label="Token claims" /></>)}
+        {state?.token && (<><h3>Access token (raw, from PingFederate)</h3><Json value={state.token.access_token} label="Access token" /><h3>Decoded claims</h3><Json value={state.token.claims} label="Token claims" hot={POPPY_HOT} /></>)}
       </Step>
 
       <Step n={3} title="Call the Company with a Poppy-Session" done={last?.response?.status === 200}>
@@ -125,14 +125,14 @@ export default function RunPanel({ info, resetSignal }) {
         <input id="path" value={path} onChange={(e) => setPath(e.target.value)} spellCheck={false} autoComplete="off" />
         <p><button type="button" onClick={call} disabled={off || busy !== "" || !state?.signedIn} data-testid="call">Call with token and Poppy-Session</button></p>
         {last && (<>
-          <h3>Request</h3><Json value={last.request} label="Request" />
-          <h3>Response <span className={`tag ${last.response.status === 200 ? "tag--ok" : "tag--warn"}`}>{last.response.status}</span></h3><Json value={last.response.body} label="Response" />
+          <h3>Request</h3><Json value={last.request} label="Request" hot={POPPY_HOT} />
+          <h3>Response <span className={`tag ${last.response.status === 200 ? "tag--ok" : "tag--warn"}`}>{last.response.status}</span></h3><Json value={last.response.body} label="Response" hot={POPPY_HOT} />
         </>)}
       </Step>
 
       <section className="panel" aria-labelledby="log">
         <h2 id="log">Every step so far</h2>
-        {state?.steps?.length ? <Json value={state.steps} label="Step log" /> : <p className="muted">Nothing yet.</p>}
+        {state?.steps?.length ? <Json value={state.steps} label="Step log" hot={POPPY_HOT} /> : <p className="muted">Nothing yet.</p>}
       </section>
     </div>
   );

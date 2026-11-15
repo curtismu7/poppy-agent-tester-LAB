@@ -45,6 +45,8 @@ npm test                    # server, web and repo tests
 npm run doctor              # preflight, same checks as /api/health
 ```
 
+The **Agent chat** tab is a guided script by default: chips run the real steps and the agent lines are scripted. Put `ANTHROPIC_API_KEY` in `.env` (see `.env.example`) and it becomes a live Claude agent (`claude-opus-5-5`, `PAT_CHAT_MODEL` to change) whose three tools are the same real steps: read the Company, start the PingFederate sign-in, call the Company API. The tools take no host, so nothing the model reads can point the agent elsewhere.
+
 Sign-in needs a PingFederate CIMD policy for this agent and the app reachable over https: see [docs/setup.md](docs/setup.md). Docker (OrbStack): `HOST_PORT=5450 docker compose up --build -d`.
 
 ## Presenting

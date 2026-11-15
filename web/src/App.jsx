@@ -10,7 +10,7 @@ const VERSION = (() => { try { return JSON.parse(fs.readFileSync(new URL("../../
 
 export const TABS = [
   { id: "run", label: "Run it" },
-  { id: "chat", label: "Chat with the agent" },
+  { id: "chat", label: "Agent chat" },
   { id: "diagram", label: "Diagram" },
   { id: "why", label: "Why Poppy" },
   { id: "talk", label: "Talk track" },

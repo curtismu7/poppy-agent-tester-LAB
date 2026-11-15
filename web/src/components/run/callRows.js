@@ -6,6 +6,35 @@ const pathOf = (u) => { try { const x = new URL(u); return x.pathname; } catch {
 const latest = (steps, kind) => [...(steps || [])].reverse().find((s) => s.kind === kind);
 const short = (s, n = 28) => (typeof s === "string" && s.length > n ? `${s.slice(0, n)}…` : s);
 
+const b64json = (seg) => {
+  try {
+    const bin = atob(seg.replace(/-/g, "+").replace(/_/g, "/"));
+    return JSON.parse(new TextDecoder().decode(Uint8Array.from(bin, (c) => c.charCodeAt(0))));
+  } catch { return null; }
+};
+
+/**
+ * An application/x-www-form-urlencoded body as its fields, so a reader sees names and values instead of one escaped line.
+ * The client_assertion (private_key_jwt) is opened into its header and claims; the token itself stays whole underneath.
+ */
+export function decodeForm(body) {
+  if (typeof body !== "string") return body;
+  const out = {};
+  for (const [k, v] of new URLSearchParams(body)) {
+    const [h, p] = k === "client_assertion" ? v.split(".") : [];
+    const header = h && b64json(h);
+    const claims = p && b64json(p);
+    out[k] = header && claims ? { header, claims, jwt: v } : v;
+  }
+  return out;
+}
+
+// A sent form body: the decoded fields open, the exact bytes on the wire one click away.
+const formRequest = (body) => [
+  { label: "Request: the form fields", value: decodeForm(body), decoded: true },
+  { label: "Request as sent (url-encoded)", value: body },
+];
+
 // Fixed copy. An array is shown as numbered reasons, a string as prose. Full name of the protocol in teaching text.
 export const WHY = {
   poppy: "The Company publishes who it is, which scopes it offers and which APIs they unlock. This is the agent's first contact: one GET, no identity yet. The document carries protocol_version; this run speaks spec 1.0, and a Company on any 1.x is compatible.",
@@ -57,7 +86,7 @@ export function buildRows(state) {
     rows.push({
       id: "par", method: "POST", path: par ? pathOf(par.request.url) : pathOf(cfg.parEndpoint), status: par?.response?.status ?? null, why: WHY.par,
       kv: par ? [["Host", host(par.request.url)], ["Content-Type", "application/x-www-form-urlencoded"]] : [],
-      raw: par ? [{ label: "Request (form)", value: par.request.body }, { label: "Response", value: par.response.body }] : [],
+      raw: par ? [...formRequest(par.request.body), { label: "Response", value: par.response.body }] : [],
     });
   }
   rows.push({
@@ -68,7 +97,7 @@ export function buildRows(state) {
   rows.push({
     id: "token", method: "POST", path: tok ? pathOf(tok.request.url) : "(token endpoint) authorization_code + PKCE", status: tok?.response?.status ?? null, why: WHY.token,
     kv: tok ? [["Host", host(tok.request.url)], ["Content-Type", "application/x-www-form-urlencoded"]] : [],
-    raw: tok ? [{ label: "Request (form)", value: tok.request.body }, { label: "Response", value: tok.response.body }] : [],
+    raw: tok ? [...formRequest(tok.request.body), { label: "Response", value: tok.response.body }] : [],
   });
   rows.push({
     id: "call", method: "GET", path: call ? pathOf(call.request.url) : "/poppy/api/v1/me", status: call?.response?.status ?? null, why: WHY.call,

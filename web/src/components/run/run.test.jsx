@@ -2,14 +2,17 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import App from "../../App";
 import { setJsonView } from "../JsonPane";
-import { buildRows, latestSession, WHY } from "./callRows";
+import { buildRows, decodeForm, latestSession, WHY } from "./callRows";
 
 const json = (body, status = 200) => Promise.resolve({ ok: status < 400, status, json: () => Promise.resolve(body) });
 const CO = "https://company.example";
 const PF = "https://pf.example:9031";
+const b64 = (o) => btoa(JSON.stringify(o)).replace(/=+$/, "").replace(/\+/g, "-").replace(/\//g, "_");
+const ASSERTION = `${b64({ typ: "client-authentication+jwt", alg: "ES256", kid: "k1" })}.${b64({ iss: "https://agent.example/client.json", aud: PF, exp: 1800000060 })}.sig`;
+const PAR_BODY = new URLSearchParams({ response_type: "code", client_id: "https://agent.example/client.json", scope: "accounts:read", login_hint: "demouser", client_assertion: ASSERTION }).toString();
 const STEPS = [
   { kind: "discover", request: { urls: [`${CO}/.well-known/poppy.json`] }, response: { checks: [] } },
-  { kind: "par", request: { method: "POST", url: `${PF}/as/par.oauth2`, body: "response_type=code&client_id=x" }, response: { status: 201, body: { request_uri: "urn:ietf:params:oauth:request_uri:abc", expires_in: 60 } } },
+  { kind: "par", request: { method: "POST", url: `${PF}/as/par.oauth2`, body: PAR_BODY }, response: { status: 201, body: { request_uri: "urn:ietf:params:oauth:request_uri:abc", expires_in: 60 } } },
   { kind: "authorize", request: { url: `${PF}/as/authorization.oauth2?client_id=x&request_uri=urn%3Aabc` } },
   { kind: "token", request: { method: "POST", url: `${PF}/as/token.oauth2`, body: "grant_type=authorization_code" }, response: { status: 200, body: { token_type: "Bearer" } } },
   { kind: "call", request: { method: "GET", url: `${CO}/poppy/api/v1/me`, headers: { authorization: "Bearer t", "poppy-session": "s".repeat(60), "poppy-version": "1.0" }, session: { header: { typ: "poppy-session+jwt", poppy_dlg: "d" }, payload: { sub: "person-1", sid: "sid-1", htm: "GET" } }, delegation: { header: { typ: "poppy-delegation+jwt" }, payload: { iss: "https://agent.example/client.json" } } }, response: { status: 200, body: { state: "signed_in", user_id: "person-1" } } },
@@ -49,6 +52,19 @@ describe("buildRows", () => {
     expect(rows.call.kv).toContainEqual(["Poppy-Version", "1.0"]);
     expect(rows.call.path).toBe("/poppy/api/v1/me");
     expect(rows.poppy.raw[0].value.protocol_version).toBe("1.0");
+  });
+  it("a form body is shown as its fields, the client assertion opened into header and claims, the exact bytes kept as sent", () => {
+    const rows = Object.fromEntries(buildRows(STATE).map((r) => [r.id, r]));
+    const [fields, sent] = rows.par.raw;
+    expect(fields.decoded).toBe(true);
+    expect(fields.value.client_id).toBe("https://agent.example/client.json");
+    expect(fields.value.login_hint).toBe("demouser");
+    expect(fields.value.client_assertion.header.typ).toBe("client-authentication+jwt");
+    expect(fields.value.client_assertion.claims.aud).toBe(PF);
+    expect(fields.value.client_assertion.jwt).toBe(ASSERTION);
+    expect(sent.value).toBe(PAR_BODY);
+    expect(rows.token.raw[0].value).toEqual({ grant_type: "authorization_code" });
+    expect(decodeForm("client_assertion=not-a-jwt").client_assertion).toBe("not-a-jwt");
   });
   it("a refused call is a warning tone, and the newest step of a kind wins", () => {
     const later = { ...STEPS[4], response: { status: 400, body: { error: "version_unsupported" } } };
@@ -102,6 +118,9 @@ describe("the three pages", () => {
     expect(call.textContent).toMatch(/Poppy-Version/);
     expect(call.textContent).toMatch(/Why this call/);
     expect(screen.getByTestId("row-par").closest("li").textContent).toMatch(/request_uri/);
+    const fields = within(screen.getByTestId("row-par").closest("li")).getByText("Request: the form fields").closest("details");
+    expect(fields.open).toBe(true);
+    expect(fields.textContent).toMatch(/demouser/);
   });
   it("an honest-gaps box names PingFederate, PingOne and the allow-list", () => {
     mockApi();

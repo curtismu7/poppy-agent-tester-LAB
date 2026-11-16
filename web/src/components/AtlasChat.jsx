@@ -170,7 +170,7 @@ export default function AtlasChat({ info, resetSignal }) {
     setMsg(""); setPhase("signin"); highlight("authorize");
     say("person", SCRIPT.authorize.person);
     say("agent", SCRIPT.authorize.need);
-    const r = await postJson("/api/authorize", {});
+    const r = await postJson("/api/authorize", { from: "chat" });
     if (!r.ok) { setPhase(scopes.length ? "discovered" : "idle"); setMsg(r.body.message ?? r.body.error ?? `HTTP ${r.status}`); return; }
     window.location.assign(r.body.url);
   };

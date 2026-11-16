@@ -33,6 +33,22 @@ beforeEach(() => { window.HTMLElement.prototype.scrollIntoView = vi.fn(); setJso
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 
 describe("AtlasChat", () => {
+  it("starts the sign-in as the chat, so the browser comes back to this tab", async () => {
+    const discovered = { ...STATE, config: { origin: "https://company.example", issuer: "https://pf.example", scope: "accounts:read" }, discovery: { ok: true, checks: [], poppy: { auth: { scopes: { "accounts:read": "Read" } } } } };
+    const sent = [];
+    globalThis.fetch = vi.fn((url, opts = {}) => {
+      if (url === "/api/diagram?name=poppy-flow") return json(DIAGRAM);
+      if (url === "/api/state") return json(discovered);
+      if (url === "/api/authorize") { sent.push(JSON.parse(opts.body)); return json({ error: "stop here" }, 502); }
+      return json({ error: "nope" }, 404);
+    });
+    render(<AtlasChat info={INFO} resetSignal={0} />);
+    const chip = await waitFor(() => screen.getByTestId("atlas-chip-0"));
+    expect(chip.textContent).toMatch(/Where's my order/);
+    fireEvent.click(chip);
+    await waitFor(() => expect(sent).toEqual([{ from: "chat" }]));
+  });
+
   it("shows the hint and no chips until the Company origins are known", async () => {
     mockApi();
     render(<AtlasChat info={INFO} resetSignal={0} />);

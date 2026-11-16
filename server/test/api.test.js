@@ -338,6 +338,21 @@ test('the public agent name serves only client.json, jwks.json and /cb', async (
   } finally { if (old === undefined) delete process.env.PAT_AGENT_HOST; else process.env.PAT_AGENT_HOST = old; }
 });
 
+test('the sign-in returns to the tab that started it; anything but a short lowercase name is ignored', async () => {
+  await post('/api/discover', { origin: originOf(company), issuer: originOf(pf) }, 'tab1');
+  const back = async (from) => {
+    const a = await (await post('/api/authorize', { scope: 'accounts:read', ...(from === undefined ? {} : { from }) }, 'tab1')).json();
+    const state = new URL(a.url).searchParams.get('state');
+    const cb = await fetch(`http://127.0.0.1:${agentPort}/cb?state=${encodeURIComponent(state)}&error=access_denied`, { redirect: 'manual' });
+    return cb.headers.get('location');
+  };
+  assert.equal(await back('chat'), `http://127.0.0.1:${agentPort}/?signin=error#chat`);
+  assert.equal(await back('run'), `http://127.0.0.1:${agentPort}/?signin=error#run`);
+  for (const bad of [undefined, '', 'https://evil.example', 'chat#x', 'Chat', 'a'.repeat(17), ['chat'], 5]) {
+    assert.equal(await back(bad), `http://127.0.0.1:${agentPort}/?signin=error`, String(bad));
+  }
+});
+
 // ---- second review: the public-name sign-in return, and the iss / body edge cases ----
 const hostGet = (path, host) => new Promise((res, rej) => {
   const q = http.request({ host: '127.0.0.1', port: agentPort, path, method: 'GET', headers: { host } }, (r) => { r.resume(); res({ status: r.statusCode, location: r.headers.location }); });

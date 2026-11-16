@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { getJson, postJson } from "../api";
 import Json, { POPPY_HOT } from "./Json";
 import Pager from "./run/Pager";
@@ -71,14 +71,25 @@ export default function RunPanel({ info, resetSignal }) {
     if (!a.ok) return setMsg((r.body.ok ? "The Company's documents pass every check. " : "The Company's documents have problems; see the checks. ") + say(a));
     window.location.assign(a.body.url);
   });
-  const call = () => run("call", async () => {
+  const call = (auto = false) => run("call", async () => {
     const r = await postJson("/api/call", { path });
     if (!r.ok) return setMsg(say(r));
+    if (auto) setMsg("Signed in, then called the Company with the token and a fresh Poppy-Session: see the call row below.");
   });
 
   const hosted = info?.hosted === true;
   const unknownMode = info === undefined || info === null; // until the server says live or hosted, no action is offered
   const off = hosted || unknownMode;
+
+  // Back from a good sign-in, make the call the person came for, once. Only when the newest step is that sign-in's
+  // token, so a reload of ?signin=ok after the call does not call again.
+  const autoCall = useRef(new URLSearchParams(window.location.search).get("signin") === "ok");
+  useEffect(() => {
+    if (!autoCall.current || off || busy || !state?.signedIn) return;
+    autoCall.current = false;
+    const last = state.steps?.[state.steps.length - 1];
+    if (last?.kind === "token" && !last.error) call(true);
+  }, [state, off, busy]); // eslint-disable-line react-hooks/exhaustive-deps
   const scopes = state?.discovery?.poppy?.auth?.scopes ? Object.keys(state.discovery.poppy.auth.scopes) : [];
   const notices = (
     <>

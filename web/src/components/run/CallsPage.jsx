@@ -76,8 +76,15 @@ export default function CallsPage({ ui, c }) {
         <p className="rp-steps">
           <button type="button" onClick={c.discover} disabled={off || busy !== "" || !origin || !issuer} data-testid="discover">{busy === "discover" ? "Reading..." : "1. Read the Company"}</button>
           <button type="button" onClick={c.signIn} disabled={off || busy !== "" || !state?.discovery || !scope} data-testid="signin">2. Sign in as the agent</button>
-          <button type="button" onClick={c.call} disabled={off || busy !== "" || !state?.signedIn} data-testid="call">3. Call with token and Poppy-Session</button>
+          <button type="button" onClick={() => c.call()} disabled={off || busy !== "" || !state?.signedIn} data-testid="call">3. Call with token and Poppy-Session</button>
         </p>
+        {!off && (
+          <p className="muted rp-hint" data-testid="step-hint">
+            {!state?.discovery ? "Start with Run it (1 click), or step 1."
+              : !state?.signedIn ? "Next: 2. Sign in. When you come back, the call runs by itself."
+              : "Signed in. 3 calls the Company again with a fresh Poppy-Session."}
+          </p>
+        )}
         <details className="rp-opts"><summary>Options: scope, resource indicator, path</summary>
           <label htmlFor="scope">Scope to ask for</label>
           <select id="scope" value={scope} onChange={(e) => setScope(e.target.value)} disabled={!scopes.length}>

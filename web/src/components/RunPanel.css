@@ -29,6 +29,9 @@
 .rp-fields { display: grid; gap: 0 12px; align-items: end; grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); }
 .rp-fields input, .rp-opts input[type="text"], .rp-opts select, .rp-opts input:not([type]) { width: 100%; }
 .rp-steps { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0 4px; }
+/* A step you cannot take yet must look it: the shared 0.75 opacity left these looking ready. */
+.rp-steps button:disabled { opacity: 0.45; border-style: dashed; }
+.rp-hint { margin: 2px 0 8px; font-size: var(--font-size-2xs, 12px); }
 .rp-opts input[type="checkbox"] { width: auto; margin: 0 6px 0 0; }
 
 /* the calls: inspector-row style */

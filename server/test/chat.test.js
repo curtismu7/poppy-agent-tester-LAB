@@ -44,6 +44,7 @@ async function startApp(opts) {
   const s = await listen(createApp({ agent: agentKey, baseUrl: 'https://agent.example', sessions: createSessions(), health: health(), fetchImpl: (...a) => fetch(...a), ...opts }));
   const base = originOf(s);
   return {
+    base,
     post: (p, body, ws = 'w1') => fetch(`${base}${p}`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-workspace': ws, origin: base }, body: JSON.stringify(body ?? {}) }),
     get: (p, ws = 'w1') => fetch(`${base}${p}`, { headers: { 'x-workspace': ws } }),
   };
@@ -120,6 +121,16 @@ test('start_sign_in hands the page the PingFederate URL; a call before sign-in c
   const firstResult = client.sent[1].messages.at(-1).content[0];
   assert.equal(firstResult.is_error, true);
   assert.match(firstResult.content, /sign_in_first/);
+});
+
+test('a sign-in the chat agent started returns the browser to the Agent chat tab', async () => {
+  const client = scripted([toolUse('read_company'), toolUse('start_sign_in'), say('Off to PingFederate.')]);
+  const a = await startApp({ chat: { client, model: 'm' } });
+  const b = await (await a.post('/api/chat', { text: "Where's my order?" })).json();
+  const state = new URL(b.signInUrl).searchParams.get('state');
+  const cb = await fetch(`${a.base}/cb?state=${encodeURIComponent(state)}&error=access_denied`, { redirect: 'manual' });
+  assert.equal(cb.status, 302);
+  assert.match(cb.headers.get('location'), /\/\?signin=error#chat$/);
 });
 
 test('bad input is refused before any model call, and a model failure leaves no half turn behind', async () => {

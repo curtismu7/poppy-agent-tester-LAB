@@ -64,10 +64,11 @@ export function createApp({ configFile = CONFIG, agent, health = createHealth({ 
     pendingByState.delete(String(req.query.state || ''));
     const rec = ws && sessions.get(ws);
     if (!rec?.pending || rec.pending.state !== req.query.state) return res.status(400).type('text').send('Unknown or expired sign-in. Start again from the page.');
-    const { verifier, useResource, returnTo } = rec.pending;
+    const { verifier, useResource, returnTo, from } = rec.pending;
     rec.pending = null;
     // The sign-in redirect may land on the public agent name, which serves nothing else; send the browser back to the loopback page.
-    const home = (q) => `${returnTo || ''}/?${q}`;
+    // Back to the tab the sign-in started from (#chat, #run), so the person lands where they were.
+    const home = (q) => `${returnTo || ''}/?${q}${from ? `#${from}` : ''}`;
     // RFC 9207: if the redirect carries an iss it must be the issuer this sign-in started with (a mix-up with another server is refused),
     // and if the issuer says it always sends one, its absence is refused too.
     // A repeated or array-valued iss (?iss[]=...) is not a string and is refused, never coerced.
@@ -208,7 +209,9 @@ export function createApp({ configFile = CONFIG, agent, health = createHealth({ 
       const bHost = xfHost.split(',')[0].trim();
       if (bHost) returnTo = `${xfProto}://${bHost}${proxyPath}`;
     }
-    rec.pending = { state, verifier: pkce.verifier, useResource, returnTo };
+    // The page tab that started the sign-in: a short lowercase name only, used as the return fragment and nothing else.
+    const from = typeof req.body?.from === 'string' && /^[a-z]{1,16}$/.test(req.body.from) ? req.body.from : null;
+    rec.pending = { state, verifier: pkce.verifier, useResource, returnTo, from };
     rec.config.scope = scope;
     pendingByState.set(state, ws);
     if (pendingByState.size > 1000) pendingByState.delete(pendingByState.keys().next().value);
@@ -284,7 +287,7 @@ export function createApp({ configFile = CONFIG, agent, health = createHealth({ 
       if (!origin || !issuer) return { status: 409, body: { error: 'no_company', message: 'No Company is set: type the Company origin and the PingFederate issuer above the chat, or set PAT_DEMO_COMPANY_ORIGIN and PAT_DEMO_PF_ISSUER.' } };
       return runStep(discoverStep, ws, req, { origin, issuer }, { needsAgent: false });
     }
-    if (name === 'start_sign_in') return runStep(authorizeStep, ws, req, {});
+    if (name === 'start_sign_in') return runStep(authorizeStep, ws, req, { from: 'chat' });
     if (name === 'call_company_api') return runStep(callStep, ws, req, { path: typeof input.path === 'string' ? input.path : '/poppy/api/v1/me' });
     return { status: 400, body: { error: 'unknown_tool' } };
   };

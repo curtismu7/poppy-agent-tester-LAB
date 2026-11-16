@@ -57,7 +57,7 @@ export default function RunPanel({ info, resetSignal }) {
     setMsg(r.body.ok ? "The Company's documents pass every check." : "The Company's documents have problems; see the checks.");
   });
   const signIn = () => run("authorize", async () => {
-    const r = await postJson("/api/authorize", { scope, resource: useResource });
+    const r = await postJson("/api/authorize", { scope, resource: useResource, from: "run" });
     if (!r.ok) return setMsg(say(r));
     window.location.assign(r.body.url);
   });
@@ -67,7 +67,7 @@ export default function RunPanel({ info, resetSignal }) {
     const offered = Object.keys(r.body.poppy?.auth?.scopes ?? {});
     const chosen = offered.includes("accounts:read") ? "accounts:read" : offered[0] ?? "";
     if (chosen) setScope(chosen);
-    const a = await postJson("/api/authorize", { scope: chosen });
+    const a = await postJson("/api/authorize", { scope: chosen, from: "run" });
     if (!a.ok) return setMsg((r.body.ok ? "The Company's documents pass every check. " : "The Company's documents have problems; see the checks. ") + say(a));
     window.location.assign(a.body.url);
   });

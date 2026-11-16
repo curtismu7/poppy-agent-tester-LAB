@@ -116,7 +116,7 @@ describe("run it", () => {
     expect(box).not.toBeChecked();
     await waitFor(() => expect(screen.getByTestId("signin")).toBeEnabled());
     fireEvent.click(screen.getByTestId("signin"));
-    await waitFor(() => expect(authorize).toHaveBeenCalledWith(expect.objectContaining({ resource: false })));
+    await waitFor(() => expect(authorize).toHaveBeenCalledWith(expect.objectContaining({ resource: false, from: "run" })));
     fireEvent.click(box);
     expect(box).toBeChecked();
     fireEvent.click(screen.getByTestId("signin"));

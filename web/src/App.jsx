@@ -5,6 +5,7 @@ import AtlasChat from "./components/AtlasChat";
 import DiagramTab from "./components/DiagramTab";
 import { getJson, resetWorkspace } from "./api";
 import TopMenu, { applyFontSize } from "./top-menu/TopMenu.jsx";
+import VerifyMark from "./components/VerifyMark.jsx";
 
 const VERSION = (() => { try { return JSON.parse(fs.readFileSync(new URL("../../package.json", import.meta.url), "utf8")).version || null; } catch { return null; } })();
 
@@ -117,6 +118,7 @@ export default function App() {
               version={VERSION}
               onReset={reset}
             >
+              <VerifyMark id="poppy-agent-tester" />
             </TopMenu>
           </div>
         </div>

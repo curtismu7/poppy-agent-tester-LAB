@@ -151,6 +151,63 @@ describe("run it", () => {
     expect(form.classList.contains("json--form")).toBe(true);
     expect(form.textContent).toMatch(/person-1/);
   });
+  it("says what to do next under the steps", async () => {
+    mockApi();
+    render(<App />);
+    toCalls();
+    await waitFor(() => expect(screen.getByTestId("step-hint").textContent).toMatch(/^Start with Run it/));
+    cleanup();
+    mockApi({ state: DISCOVERED });
+    render(<App />);
+    toCalls();
+    await waitFor(() => expect(screen.getByTestId("step-hint").textContent).toMatch(/Sign in\. When you come back, the call runs by itself/));
+  });
+});
+
+describe("back from sign-in", () => {
+  const TOKEN = { access_token: "opaque", claims: { sub: "person-1" } };
+  const STEP = {
+    discover: { kind: "discover", request: { urls: ["https://company.example/.well-known/poppy.json"] }, response: { checks: [] } },
+    authorize: { kind: "authorize", request: { url: "https://pf.example/as/authorization.oauth2?client_id=x" } },
+    token: { kind: "token", request: { method: "POST", url: "https://pf.example/as/token.oauth2", body: "grant_type=authorization_code" }, response: { status: 200, body: {} } },
+    call: { kind: "call", request: { method: "GET", url: "https://company.example/poppy/api/v1/me", headers: {} }, response: { status: 200, body: {} } },
+  };
+  const SIGNED_IN = { ...DISCOVERED, signedIn: true, token: TOKEN, steps: [STEP.discover, STEP.authorize, STEP.token] };
+  const back = (q) => window.history.replaceState({}, "", `/?signin=${q}`);
+  afterEach(() => window.history.replaceState({}, "", "/"));
+  const calls = () => globalThis.fetch.mock.calls.filter(([url, o]) => url === "/api/call" && o?.method === "POST");
+
+  it("calls the Company once by itself after a good sign-in, and says so", async () => {
+    back("ok");
+    mockApi({ state: SIGNED_IN, post: { "/api/call": json({ ok: true }) } });
+    render(<App />);
+    await waitFor(() => expect(calls()).toHaveLength(1));
+    expect(JSON.parse(calls()[0][1].body)).toEqual({ path: "/poppy/api/v1/me" });
+    await waitFor(() => expect(screen.getByTestId("msg").textContent).toMatch(/^Signed in, then called the Company/));
+    await new Promise((r) => setTimeout(r, 50));
+    expect(calls()).toHaveLength(1); // the refresh after the call does not trigger another
+  });
+  it("does not call again on a reload once the call was made", async () => {
+    back("ok");
+    mockApi({ state: { ...SIGNED_IN, steps: [...SIGNED_IN.steps, STEP.call] } });
+    render(<App />);
+    await waitFor(() => expect(screen.getByTestId("call")).toBeEnabled());
+    expect(calls()).toHaveLength(0);
+  });
+  it("does not call after a failed sign-in, or without one", async () => {
+    back("error");
+    mockApi({ state: SIGNED_IN });
+    render(<App />);
+    await waitFor(() => expect(screen.getByTestId("call")).toBeEnabled());
+    expect(calls()).toHaveLength(0);
+    cleanup();
+    window.history.replaceState({}, "", "/");
+    mockApi({ state: SIGNED_IN });
+    render(<App />);
+    toCalls();
+    await waitFor(() => expect(screen.getByTestId("call")).toBeEnabled());
+    expect(calls()).toHaveLength(0);
+  });
 });
 
 describe("shell", () => {

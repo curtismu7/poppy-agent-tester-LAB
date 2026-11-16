@@ -258,7 +258,7 @@ export default function AtlasChat({ info, resetSignal }) {
         </ol>
         {diagram && (
           <PatternDiagram
-            pattern={{ ...diagram, steps: diagram.steps.map((s, i) => ({ ...s, say: i === activeArrow ? s.say : `${s.label} — run a step to light this arrow.` })) }}
+            pattern={diagram}
             resetSignal={resetSignal}
             activeEdge={activeArrow}
           />

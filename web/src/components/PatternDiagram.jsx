@@ -144,9 +144,11 @@ export default function PatternDiagram({ pattern, resetSignal = 0, activeEdge = 
   const [positions, setPositions] = useState(initial);
   const stepper = useDiagramStepper(pattern.steps.length);
   const onMove = useCallback((id, p) => setPositions((cur) => ({ ...cur, [id]: { x: p.x, y: p.y } })), []);
-  // A page that passes activeEdge at all (the chat, -1 before its first step) drives the highlight itself and gets no narration panel.
+  // A page that passes activeEdge at all (the chat, -1 before its first step) lights the arrow its own steps reached.
+  // Pressing Simulate takes the canvas back until Stop, so the walkthrough always plays; the narration is on every page.
   const pageDriven = activeEdge !== null;
-  const pageHasArrow = pageDriven && activeEdge >= 0;
+  const simulating = stepper.active || stepper.step >= 0;
+  const pageHasArrow = pageDriven && activeEdge >= 0 && !simulating;
   const step = stepper.step >= 0 ? pattern.steps[stepper.step] : null;
   // Reset restores box positions as well as the walkthrough and the view. The page-level Reset raises resetSignal.
   const reset = useCallback(() => { stepper.stop(); setPositions(initial); setTimeout(() => window.dispatchEvent(new Event(REFIT_EVENT)), 0); }, [stepper.stop, initial]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -164,12 +166,12 @@ export default function PatternDiagram({ pattern, resetSignal = 0, activeEdge = 
         </article>
       )}
       <button type="button" className="pat-reset" onClick={reset} data-testid="pattern-reset">Reset positions and walkthrough</button>
-      <div className={pageDriven ? undefined : "pat-stage"}>
+      <div className={`pat-stage${pageDriven ? " pat-stage--stacked" : ""}`}>
         <ReactFlowProvider>
-          {/* The canvas follows the page only once it names an arrow; before that (the chat at -1) the step bar still walks it. */}
+          {/* The canvas follows the page's arrow while no walkthrough is playing. */}
           <Canvas pattern={pattern} positions={positions} onMove={onMove} stepper={pageHasArrow ? null : stepper} activeEdge={pageHasArrow ? activeEdge : null} />
         </ReactFlowProvider>
-        {!pageDriven && <Narration steps={pattern.steps} stepper={stepper} />}
+        <Narration steps={pattern.steps} stepper={stepper} />
       </div>
       <p className="keys">Drag any box. Moved: {Object.keys(positions).filter((k) => positions[k].x !== initial[k].x || positions[k].y !== initial[k].y).length} box(es).</p>
     </section>

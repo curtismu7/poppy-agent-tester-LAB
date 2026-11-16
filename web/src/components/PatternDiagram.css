@@ -24,6 +24,9 @@
 .pat__lede { margin: 0 0 10px; max-width: 80ch; color: var(--text-body); font-size: var(--font-size-sm); line-height: 1.5; }
 /* Canvas and narration side by side; the narration keeps its size, so nothing below or beside it moves as the steps play. */
 .pat-stage { display: grid; gap: 12px; grid-template-columns: minmax(0, 1fr) minmax(300px, 400px); align-items: start; }
+/* A page column too narrow for side by side (the chat): the narration goes under the canvas. */
+.pat-stage--stacked { grid-template-columns: minmax(0, 1fr); }
+.pat-stage--stacked .pat-narr__now { min-height: 0; }
 /* Beside the canvas the explanation sizes to its text: it can grow without moving the diagram. */
 .pat-narr { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
 .pat-narr__now { min-height: 300px; padding: 12px 14px; border: 1px solid var(--status-info); border-radius: var(--radius-lg); background: var(--surface); }

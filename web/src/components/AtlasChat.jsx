@@ -229,6 +229,7 @@ export default function AtlasChat({ info, resetSignal }) {
           <form className="atlas-input" onSubmit={(e) => { e.preventDefault(); send(draft); }}>
             <label htmlFor="atlas-text" className="sr-only">Message your agent</label>
             <input id="atlas-text" data-testid="atlas-input" value={draft} onChange={(e) => setDraft(e.target.value)} maxLength={500} placeholder="Ask your agent…" autoComplete="off" disabled={busy} />
+            {/* ui-pattern: allow P9 Send and the suggested-question chips stay secondary; the chat view's one red control is Simulate in the diagram's DiagramControls (dc-ctrl-btn--simulate), which the checker does not read as .primary */}
             <button type="submit" data-testid="atlas-send" disabled={busy || !draft.trim()}>Send</button>
           </form>
         )}

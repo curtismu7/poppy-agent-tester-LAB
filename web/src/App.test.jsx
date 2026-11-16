@@ -154,16 +154,38 @@ describe("run it", () => {
 });
 
 describe("shell", () => {
-  it("tabs switch by click and arrow keys, and the hash follows", async () => {
+  it("shell bar first (brand, Mock badge, nav pills, TopMenu), then <main> with the banner as its first child", async () => {
+    mockApi({ info: { hosted: true, configured: false, source: "mock", realAvailable: false } });
+    render(<App />);
+    await waitFor(() => expect(screen.getByTestId("banner").textContent).toMatch(/^HOSTED SIMULATION/));
+    const bar = document.querySelector("header.shell-bar");
+    expect(bar).not.toBeNull();
+    expect(document.querySelector(".app").firstElementChild).toBe(bar);
+    expect(bar.nextElementSibling.tagName).toBe("MAIN");
+    expect(bar.querySelector(".shell-brand h1")).toHaveTextContent("Poppy Agent Tester");
+    expect(bar.querySelector("[data-testid=mode-badge]")).toHaveTextContent("Mock");
+    expect(bar.querySelector('.shell-nav a[aria-current="page"]')).toHaveTextContent("Run it");
+    expect(bar.querySelector("[data-testid=top-menu]")).toHaveClass("shell-right");
+    expect(document.querySelector("main").firstElementChild).toBe(screen.getByTestId("banner"));
+    expect(document.querySelectorAll("h1")).toHaveLength(1);
+  });
+  it("the badge says Real when the server runs real", async () => {
     mockApi();
     render(<App />);
-    fireEvent.click(screen.getByRole("tab", { name: "Talk track" }));
-    expect(window.location.hash).toBe("#talk");
-    expect(await screen.findByText("Why two headers")).toBeInTheDocument();
-    fireEvent.keyDown(screen.getByRole("tab", { name: "Talk track" }), { key: "ArrowRight" });
-    expect(screen.getByRole("tab", { name: "Run it" })).toHaveAttribute("aria-selected", "true");
+    await waitFor(() => expect(screen.getByTestId("mode-badge")).toHaveTextContent("Real"));
   });
-  it("Ctrl/Cmd+P (print) does not toggle presenter mode, and Home/End move across the tabs", async () => {
+  it("nav pills switch by click and arrow keys, and the hash follows", async () => {
+    mockApi();
+    render(<App />);
+    fireEvent.click(screen.getByRole("link", { name: "Talk track" }));
+    expect(window.location.hash).toBe("#talk");
+    expect(screen.getByRole("link", { name: "Talk track" })).toHaveAttribute("aria-current", "page");
+    expect(await screen.findByText("Why two headers")).toBeInTheDocument();
+    fireEvent.keyDown(screen.getByRole("link", { name: "Talk track" }), { key: "ArrowRight" });
+    expect(screen.getByRole("link", { name: "Run it" })).toHaveAttribute("aria-current", "page");
+    expect(screen.getByRole("link", { name: "Talk track" })).not.toHaveAttribute("aria-current");
+  });
+  it("Ctrl/Cmd+P (print) does not toggle presenter mode, and Home/End move across the nav pills", async () => {
     mockApi();
     render(<App />);
     // One modifier per assertion: a combined sequence toggles on and back off and can pass with the guard removed.
@@ -171,10 +193,10 @@ describe("shell", () => {
     expect(screen.queryByTestId("presenter-say")).toBeNull();
     fireEvent.keyDown(window, { key: "P", metaKey: true });
     expect(screen.queryByTestId("presenter-say")).toBeNull();
-    fireEvent.keyDown(screen.getByRole("tab", { name: "Run it" }), { key: "End" });
-    expect(screen.getByRole("tab", { name: "Talk track" })).toHaveAttribute("aria-selected", "true");
-    fireEvent.keyDown(screen.getByRole("tab", { name: "Talk track" }), { key: "Home" });
-    expect(screen.getByRole("tab", { name: "Run it" })).toHaveAttribute("aria-selected", "true");
+    fireEvent.keyDown(screen.getByRole("link", { name: "Run it" }), { key: "End" });
+    expect(screen.getByRole("link", { name: "Talk track" })).toHaveAttribute("aria-current", "page");
+    fireEvent.keyDown(screen.getByRole("link", { name: "Talk track" }), { key: "Home" });
+    expect(screen.getByRole("link", { name: "Run it" })).toHaveAttribute("aria-current", "page");
   });
   it("presenter mode shows the talk track and keeps the banner; Esc leaves it", async () => {
     mockApi();
@@ -194,7 +216,7 @@ describe("shell", () => {
   it("the diagram tab loads the flow with Simulate and Reset controls", async () => {
     mockApi();
     render(<App />);
-    fireEvent.click(screen.getByRole("tab", { name: "Diagram" }));
+    fireEvent.click(screen.getByRole("link", { name: "Diagram" }));
     await waitFor(() => expect(screen.getByRole("button", { name: /simulate/i })).toBeInTheDocument());
     expect(screen.getAllByRole("button", { name: /reset/i }).length).toBeGreaterThanOrEqual(2); // the page's and the diagram's
   });

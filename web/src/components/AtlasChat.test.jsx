@@ -77,6 +77,10 @@ describe("AtlasChat", () => {
     expect(screen.getAllByText(/Found them/).length).toBeGreaterThan(0);
     // the diagram highlights arrow 1 (discover) via the page-driven path
     expect(screen.getByTestId("pattern-page-now").textContent).toMatch(/Arrow 1/);
+    // every step keeps its real explanation, not only the lit one
+    fireEvent.click(screen.getByTestId("narr-step-2"));
+    expect(screen.getByTestId("pattern-now").textContent).toContain(DIAGRAM.steps[2].say);
+    expect(screen.getByTestId("pattern-now").textContent).not.toMatch(/run a step to light/);
   });
 
   it("summarises a long scope list for the chat instead of listing every scope", () => {

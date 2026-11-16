@@ -63,16 +63,20 @@ describe("the walkthrough explains itself", () => {
     expect(lede.className).toBe("pat__lede");
   });
 
-  it("a page-driven diagram (the chat) keeps its own box and shows no narration panel", () => {
+  it("a page-driven diagram (the chat) shows the page's arrow, the narration too, and Simulate takes the canvas until stopped", () => {
     render(<PatternDiagram pattern={PATTERN} activeEdge={2} />);
-    expect(screen.queryByTestId("pattern-narration")).toBeNull();
+    expect(screen.getByTestId("pattern-narration")).toBeInTheDocument();
     expect(screen.getByTestId("pattern-page-now").textContent).toContain(PATTERN.steps[2].label);
+    fireEvent.click(screen.getByRole("button", { name: /simulate/i }));
+    expect(screen.queryByTestId("pattern-page-now")).toBeNull(); // the walkthrough owns the canvas now
+    expect(screen.getByTestId("pattern-now").textContent).toContain(PATTERN.steps[0].why);
+    fireEvent.click(screen.getByTestId("pattern-reset"));
+    expect(screen.getByTestId("pattern-page-now").textContent).toContain(PATTERN.steps[2].label); // back to the page's arrow
   });
-  it("the chat before its first step (activeEdge -1) is still page-driven: no narration panel, no empty box", () => {
+  it("the chat before its first step (activeEdge -1): narration, no empty box, and Simulate walks the arrows", () => {
     render(<PatternDiagram pattern={PATTERN} activeEdge={-1} />);
-    expect(screen.queryByTestId("pattern-narration")).toBeNull();
+    expect(screen.getByTestId("pattern-narration")).toBeInTheDocument();
     expect(screen.queryByTestId("pattern-page-now")).toBeNull();
-    // the step bar still walks the arrows there, as before
     fireEvent.click(screen.getByRole("button", { name: /simulate/i }));
     expect(screen.getByTestId("pattern-step-bar").textContent).toMatch(/Step 1 of/);
   });

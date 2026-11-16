@@ -63,6 +63,7 @@ export default function CallsPage({ ui, c }) {
 
       <div className="rp-controls">
         <p className="rp-controls__main">
+          {/* ui-pattern: allow P9 Run it (1 click) is the one primary of the calls page: RunPanel passes plainNext there, so the Pager Next is plain (the static check cannot follow that prop) */}
           <button type="button" className="primary" onClick={c.oneClick} disabled={off || busy !== ""} data-testid="one-click">Run it (1 click)</button>{" "}
           <span className="muted">fills in this deployment's Company and issuer, reads the Company, then hands you to the authorization server to sign in.</span>
         </p>

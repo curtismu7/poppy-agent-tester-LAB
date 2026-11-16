@@ -102,7 +102,7 @@ export default function RunPanel({ info, resetSignal }) {
       {page === 1 && <IntroPage />}
       {page === 2 && <CallsPage ui={notices} c={ctx} />}
       {page === 3 && <TokenPage state={state} />}
-      <Pager page={page} pages={PAGES} onPage={(n) => { setPage(n); window.scrollTo?.({ top: 0 }); }} />
+      <Pager page={page} pages={PAGES} plainNext={page === 2} onPage={(n) => { setPage(n); window.scrollTo?.({ top: 0 }); }} />
     </div>
   );
 }

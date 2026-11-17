@@ -220,12 +220,30 @@ test('RFC 9207: when the issuer says it always sends iss, a redirect without one
   } finally { seen.pfMetaOverride = undefined; seen.redirectIss = undefined; }
 });
 
-test('a token without sub is refused rather than signed with a made-up user', async () => {
+// Spec 1.0 section 5.1: the Session's sub is the User ID, the agent's own pseudonymous identifier for this person at one Company.
+// It must not contain or derive from personal information, so it is never the access token's sub (the issuer's name for the person).
+const sessionSub = (headers) => decodeJws(headers['poppy-session']).payload.sub;
+const callAs = async (ws) => { const before = seen.calls.length; const r = await post('/api/call', {}, ws); assert.equal(r.status, 200, 'call'); assert.equal(seen.calls.length, before + 1); return seen.calls.at(-1); };
+
+test('the Poppy-Session sub is a random User ID the agent made up, never the access token sub (spec 1.0 section 5.1)', async () => {
+  await signedIn('u1');
+  const sub = sessionSub(await callAs('u1'));
+  assert.match(sub, /^usr-[A-Za-z0-9_-]{22}$/);
+  assert.notEqual(sub, 'person-1');
+  assert.ok(!sub.includes('person-1'), 'nothing of the token sub is in the User ID');
+});
+
+test('the User ID is stable for the same person and Company, and different for another visitor', async () => {
+  await signedIn('u2'); await signedIn('u3');
+  const first = sessionSub(await callAs('u2'));
+  assert.equal(sessionSub(await callAs('u2')), first, 'a second call in the same Session names the same User ID');
+  assert.notEqual(sessionSub(await callAs('u3')), first, 'another visitor gets another User ID even for the same token sub');
+});
+
+test('a token without a sub still works: the Session never needed it', async () => {
   seen.noSub = true;
-  try { await signedIn('r5'); } finally { seen.noSub = false; }
-  const r = await post('/api/call', {}, 'r5');
-  assert.equal(r.status, 409);
-  assert.equal((await r.json()).error, 'no_sub');
+  try { await signedIn('u4'); } finally { seen.noSub = false; }
+  assert.match(sessionSub(await callAs('u4')), /^usr-/);
 });
 
 test('call paths: // and .. are refused with bad_path once signed in', async () => {

@@ -14,7 +14,7 @@ export function buildSample() {
   const claims = { scope: 'accounts:read', client_id: CLIENT, iss: ISSUER, aud: 'enduser.example', iat: now, exp: now + 3600, sub: 'example-person', jti: crypto.randomBytes(12).toString('base64url') };
   const token = `${b64url(JSON.stringify({ alg: 'RS256', typ: 'JWT', kid: 'example-key' }))}.${b64url(JSON.stringify(claims))}.EXAMPLE-SIGNATURE-NOT-REAL`;
   const delegation = signDelegation({ clientId: CLIENT, kid, signingKey: agent.privateKey, delegatedPublicJwk: delegated.publicJwk, now });
-  const session = signSession({ delegation, delegatedKey: delegated, clientId: CLIENT, issuer: ISSUER, sid: 'sid-example', sub: claims.sub, method: 'GET', url: `${CO}/poppy/api/v1/me`, accessToken: token, now });
+  const session = signSession({ delegation, delegatedKey: delegated, clientId: CLIENT, issuer: ISSUER, sid: 'sid-example', sub: 'usr-EXAMPLE-random-per-company', method: 'GET', url: `${CO}/poppy/api/v1/me`, accessToken: token, now });
   const assertion = clientAssertion({ clientId: CLIENT, issuer: ISSUER, kid, signingKey: agent.privateKey, now });
 
   const run = {

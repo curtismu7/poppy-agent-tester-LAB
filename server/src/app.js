@@ -249,8 +249,9 @@ export function createApp({ configFile = CONFIG, agent, health = createHealth({ 
     if (!rec.token) return res.status(409).json({ error: 'sign_in_first' });
     const p = req.body?.path ?? '/poppy/api/v1/me';
     if (!safePath(p)) return res.status(400).json({ error: 'bad_path' });
-    const sub = rec.token.claims?.sub;
-    if (typeof sub !== 'string' || !sub) return res.status(409).json({ error: 'no_sub', message: 'The access token has no sub claim, so the Poppy-Session cannot name the user. This tester needs a JWT access token.' });
+    // The Session's sub is the agent's own random per-Company User ID (spec 1.0 section 5.1), never the access token's sub: that is the
+    // issuer's name for the person (here the login name) and a User ID must not contain or derive from personal information.
+    const sub = sessions.userId(ws, rec.config.issuerClaim);
     const url = `${rec.config.origin}${p}`;
     const clientId = `${baseUrl}/client.json`;
     const delegation = signDelegation({ clientId, kid: agent.kid, signingKey: agent.privateKey, delegatedPublicJwk: rec.delegated.publicJwk });

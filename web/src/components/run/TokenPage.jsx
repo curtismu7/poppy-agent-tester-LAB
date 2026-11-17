@@ -29,7 +29,7 @@ export default function TokenPage({ state }) {
         </div>
         <div className="rp-card">
           <h3>Poppy-Session</h3>
-          <p className="muted">Signed by the agent for one request. Binds person, agent, method, URL and token. The Company refuses replays and sessions signed for another token.</p>
+          <p className="muted">Signed by the agent for one request. Binds person, agent, method, URL and token. Its sub is a random User ID the agent made up for this Company, not the token's sub. The Company refuses replays and sessions signed for another token.</p>
           {sess?.payload ? (
             <>
               <Json value={sess.payload} label="Poppy-Session claims" hot={POPPY_HOT} />

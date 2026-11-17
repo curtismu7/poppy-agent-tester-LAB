@@ -84,7 +84,7 @@ describe("buildRows", () => {
 });
 
 describe("the three pages", () => {
-  it("one primary per page: Next on the first page, Run it (1 click) on the calls page (Next is plain there)", async () => {
+  it("one primary per page: Next on the first page, Start flow (1 click) on the calls page (Next is plain there)", async () => {
     mockApi();
     render(<App />);
     const primaries = () => [...document.querySelectorAll("main button.primary")].map((x) => x.dataset.testid);

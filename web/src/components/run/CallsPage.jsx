@@ -63,8 +63,8 @@ export default function CallsPage({ ui, c }) {
 
       <div className="rp-controls">
         <p className="rp-controls__main">
-          {/* ui-pattern: allow P9 Run it (1 click) is the one primary of the calls page: RunPanel passes plainNext there, so the Pager Next is plain (the static check cannot follow that prop) */}
-          <button type="button" className="primary" onClick={c.oneClick} disabled={off || busy !== ""} data-testid="one-click">Run it (1 click)</button>{" "}
+          {/* ui-pattern: allow P9 Start flow (1 click) is the one primary of the calls page: RunPanel passes plainNext there, so the Pager Next is plain (the static check cannot follow that prop) */}
+          <button type="button" className="primary" onClick={c.oneClick} disabled={off || busy !== ""} data-testid="one-click">Start flow (1 click)</button>{" "}
           <span className="muted">fills in this deployment's Company and issuer, reads the Company, then hands you to the authorization server to sign in.</span>
         </p>
         <div className="rp-fields">
@@ -80,7 +80,7 @@ export default function CallsPage({ ui, c }) {
         </p>
         {!off && (
           <p className="muted rp-hint" data-testid="step-hint">
-            {!state?.discovery ? "Start with Run it (1 click), or step 1."
+            {!state?.discovery ? "Press Start flow (1 click), or take step 1."
               : !state?.signedIn ? "Next: 2. Sign in. When you come back, the call runs by itself."
               : "Signed in. 3 calls the Company again with a fresh Poppy-Session."}
           </p>

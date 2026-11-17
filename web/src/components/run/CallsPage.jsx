@@ -74,7 +74,7 @@ export default function CallsPage({ ui, c }) {
             <input id="issuer" value={issuer} onChange={(e) => setIssuer(e.target.value)} placeholder="https://auth.example:9031" spellCheck={false} autoComplete="off" /></div>
         </div>
         <p className="rp-steps">
-          <button type="button" onClick={c.discover} disabled={off || busy !== "" || !origin || !issuer} data-testid="discover">{busy === "discover" ? "Reading..." : "1. Read the Company"}</button>
+          <button type="button" onClick={c.discover} disabled={off || busy !== "" || !origin || !issuer} data-testid="discover">{busy === "discover" ? "Reading..." : "1. Read the Company origin"}</button>
           <button type="button" onClick={c.signIn} disabled={off || busy !== "" || !state?.discovery || !scope} data-testid="signin">2. Sign in as the agent</button>
           <button type="button" onClick={() => c.call()} disabled={off || busy !== "" || !state?.signedIn} data-testid="call">3. Call with token and Poppy-Session</button>
         </p>

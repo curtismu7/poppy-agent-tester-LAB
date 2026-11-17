@@ -98,14 +98,14 @@ describe("the flow data", () => {
   });
   it("the chat's arrow indexes still point at the steps they mean", () => {
     const title = (i) => FLOW.steps[i].title;
-    expect(title(STEP_ARROW.discover)).toBe("Discover the Company");
+    expect(title(STEP_ARROW.discover)).toBe("Discover the Company origin");
     expect(title(2)).toMatch(/PAR/);
     expect(title(STEP_ARROW.authorize)).toBe("The person signs in");
     expect(title(STEP_ARROW.token)).toBe("The access token");
     expect(title(STEP_ARROW.call)).toBe("Call the API");
     expect(title(ARROW_VERIFIED)).toBe("The Company verifies");
     // the live agent's tools (agent chat) light the same arrows
-    expect(title(TOOL_ARROW.read_company)).toBe("Discover the Company");
+    expect(title(TOOL_ARROW.read_company)).toBe("Discover the Company origin");
     expect(title(TOOL_ARROW.start_sign_in)).toBe("The person signs in");
     expect(title(TOOL_ARROW.call_company_api)).toBe("The Company verifies");
   });

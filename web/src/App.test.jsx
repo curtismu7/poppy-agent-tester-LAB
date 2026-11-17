@@ -64,12 +64,13 @@ describe("banner", () => {
 });
 
 describe("run it", () => {
-  it("needs both typed origins before Read the Company is enabled, and shows the checks after", async () => {
+  it("needs both typed origins before Read the Company origin is enabled, and shows the checks after", async () => {
     mockApi({ post: { "/api/discover": json({ ok: true, checks: [], poppy: { auth: { scopes: { "accounts:read": "Read" } } } }) } });
     render(<App />);
     toCalls();
     await waitFor(() => expect(screen.getByTestId("mode-select")).toHaveValue("real"));
     expect(screen.getByTestId("discover")).toBeDisabled();
+    expect(screen.getByTestId("discover")).toHaveTextContent("1. Read the Company origin");
     fireEvent.change(screen.getByLabelText('Company origin'), { target: { value: "https://company.example" } });
     fireEvent.change(screen.getByLabelText(/Authorization server issuer/), { target: { value: "https://pf.example" } });
     expect(screen.getByTestId("discover")).toBeEnabled();

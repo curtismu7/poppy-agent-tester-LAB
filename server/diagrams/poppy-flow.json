@@ -2,7 +2,7 @@
   "schema": "diagram-studio/1",
   "id": "poppy-flow",
   "title": "Personal Agent Protocol: discover, sign in, call the API",
-  "lede": "A personal agent identified by a URL discovers a Company, pushes its sign-in request to PingFederate (PAR), lets the person sign in, then signs every request with a Poppy-Session. Solid arrows are what the agent (or the person's browser) sends, dashed arrows are the answers; press Simulate and each step explains itself.",
+  "lede": "A personal agent identified by a URL starts from a Company origin, pushes its sign-in request to PingFederate (PAR), lets the person sign in, then signs every request with a Poppy-Session. Solid arrows are what the agent (or the person's browser) sends, dashed arrows are the answers; press Simulate and each step explains itself.",
   "groups": {
     "actor": {
       "label": "The agent",
@@ -99,15 +99,15 @@
   ],
   "steps": [
     {
-      "title": "Discover the Company",
+      "title": "Discover the Company origin",
       "what": "The agent reads /.well-known/poppy.json and /.well-known/oauth-protected-resource from the one origin you typed. Two public GETs, no identity yet, and no redirects followed.",
-      "why": "This is how an agent meets a Company it has never seen. Nothing is configured on the agent side: the Company's own documents say what it offers and where to sign in.",
+      "why": "This is how an agent starts from a Company origin it has never seen. Nothing is configured on the agent side: the Company's own documents say what it offers and where to sign in.",
       "edges": [
         0
       ]
     },
     {
-      "title": "The Company answers",
+      "title": "The Company origin answers",
       "what": "poppy.json gives the protocol version (1.0 here), the scopes, each with a scope_hint, the issuer and the APIs. The agent checks the version is compatible (same major), the domain is the host, and the resource is exactly the origin.",
       "why": "scope_hints say whether a scope changes anything or touches personal data, so the agent can tell the person what they are about to allow. The exact-resource rule stops one Company's document from speaking for another resource on the same host.",
       "edges": [

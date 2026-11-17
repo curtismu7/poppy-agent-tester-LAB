@@ -54,7 +54,7 @@ export default function RunPanel({ info, resetSignal }) {
     if (!r.ok) { setMismatch(r.body.discovery?.checks ?? null); return setMsg(r.status === 502 ? `Could not reach the Company or the issuer: ${r.body.message}. Check ${origin} and ${issuer}.` : say(r)); }
     const offered = Object.keys(r.body.poppy?.auth?.scopes ?? {});
     setScope(offered.includes("accounts:read") ? "accounts:read" : offered[0] ?? "");
-    setMsg(r.body.ok ? "The Company's documents pass every check." : "The Company's documents have problems; see the checks.");
+    setMsg(r.body.ok ? "The Company origin's documents pass every check." : "The Company origin's documents have problems; see the checks.");
   });
   const signIn = () => run("authorize", async () => {
     const r = await postJson("/api/authorize", { scope, resource: useResource, from: "run" });
@@ -68,7 +68,7 @@ export default function RunPanel({ info, resetSignal }) {
     const chosen = offered.includes("accounts:read") ? "accounts:read" : offered[0] ?? "";
     if (chosen) setScope(chosen);
     const a = await postJson("/api/authorize", { scope: chosen, from: "run" });
-    if (!a.ok) return setMsg((r.body.ok ? "The Company's documents pass every check. " : "The Company's documents have problems; see the checks. ") + say(a));
+    if (!a.ok) return setMsg((r.body.ok ? "The Company origin's documents pass every check. " : "The Company origin's documents have problems; see the checks. ") + say(a));
     window.location.assign(a.body.url);
   });
   const call = (auto = false) => run("call", async () => {

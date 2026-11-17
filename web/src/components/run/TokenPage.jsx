@@ -16,6 +16,16 @@ export default function TokenPage({ state }) {
     <section className="rp-page" aria-labelledby="rp-tokens">
       <h2 id="rp-tokens" className="rp-title rp-title--sm">Token &amp; session</h2>
       <p className="muted">The two credentials this run produced, claim by claim. Everything here came off the wire.</p>
+      {token?.claims?.sub && (
+        <div className="rp-note" data-testid="who-is-this">
+          <span className="rp-note__lbl">Who is this?</span>
+          <dl className="rp-kv">
+            <div><dt>To the authorization server</dt><dd>{token.claims.sub} <span className="muted">(the access token's sub: who signed in)</span></dd></div>
+            {sess?.payload?.sub && <div><dt>To this Company's session</dt><dd>{sess.payload.sub} <span className="muted">(the Poppy-Session's sub: a random User ID the agent made up)</span></dd></div>}
+          </dl>
+          <p>One person, two names. A Company that sees only the Poppy-Session can recognize a returning person but cannot tell who they are. Who they are comes from the signed-in account, through the token (spec 1.0 section 5.1).</p>
+        </div>
+      )}
       <div className="rp-two">
         <div className="rp-card">
           <h3>Access token</h3>

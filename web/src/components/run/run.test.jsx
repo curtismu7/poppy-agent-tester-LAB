@@ -15,7 +15,7 @@ const STEPS = [
   { kind: "par", request: { method: "POST", url: `${PF}/as/par.oauth2`, body: PAR_BODY }, response: { status: 201, body: { request_uri: "urn:ietf:params:oauth:request_uri:abc", expires_in: 60 } } },
   { kind: "authorize", request: { url: `${PF}/as/authorization.oauth2?client_id=x&request_uri=urn%3Aabc` } },
   { kind: "token", request: { method: "POST", url: `${PF}/as/token.oauth2`, body: "grant_type=authorization_code" }, response: { status: 200, body: { token_type: "Bearer" } } },
-  { kind: "call", request: { method: "GET", url: `${CO}/poppy/api/v1/me`, headers: { authorization: "Bearer t", "poppy-session": "s".repeat(60), "poppy-version": "1.0" }, session: { header: { typ: "poppy-session+jwt", poppy_dlg: "d" }, payload: { sub: "person-1", sid: "sid-1", htm: "GET" } }, delegation: { header: { typ: "poppy-delegation+jwt" }, payload: { iss: "https://agent.example/client.json" } } }, response: { status: 200, body: { state: "signed_in", user_id: "person-1" } } },
+  { kind: "call", request: { method: "GET", url: `${CO}/poppy/api/v1/me`, headers: { authorization: "Bearer t", "poppy-session": "s".repeat(60), "poppy-version": "1.0" }, session: { header: { typ: "poppy-session+jwt", poppy_dlg: "d" }, payload: { sub: "usr-abc123", sid: "sid-1", htm: "GET" } }, delegation: { header: { typ: "poppy-delegation+jwt" }, payload: { iss: "https://agent.example/client.json" } } }, response: { status: 200, body: { state: "signed_in", user_id: "person-1" } } },
 ];
 const STATE = { workspace: "w", config: { origin: CO, issuer: PF, scope: "accounts:read", parEndpoint: `${PF}/as/par.oauth2` }, discovery: { ok: true, checks: [{ id: "par", ok: true, note: "issuer metadata lists a pushed_authorization_request_endpoint" }], poppy: { protocol_version: "1.0", auth: { scopes: { "accounts:read": "Read" } } }, resource: { resource: CO } }, signedIn: true, token: { access_token: "opaque", claims: { sub: "person-1", client_id: "https://agent.example/client.json" } }, steps: STEPS };
 
@@ -165,6 +165,22 @@ describe("the three pages", () => {
     expect(screen.getByLabelText("Delegation").textContent).toMatch(/poppy-delegation\+jwt/);
     expect(screen.getByLabelText("Token claims").textContent).toMatch(/person-1/);
     for (const name of [/CIMD/, /private_key_jwt/, /Pushed Authorization Requests/, /Resource indicator/]) expect(screen.getByText(name)).toBeInTheDocument();
+  });
+  it("the token page names the person twice: the token's sub, and the agent's own User ID in the session", async () => {
+    mockApi(); render(<App />);
+    fireEvent.click(screen.getByTestId("pager-next")); fireEvent.click(screen.getByTestId("pager-next"));
+    const who = await screen.findByTestId("who-is-this");
+    expect(who.textContent).toMatch(/person-1/);
+    expect(who.textContent).toMatch(/usr-abc123/);
+    expect(who.textContent).toMatch(/random User ID/);
+  });
+  it("without a call yet the who-is-this note shows only the token's name for the person", async () => {
+    const noCall = STEPS.filter((x) => x.kind !== "call");
+    mockApi({ state: { ...STATE, steps: noCall } }); render(<App />);
+    fireEvent.click(screen.getByTestId("pager-next")); fireEvent.click(screen.getByTestId("pager-next"));
+    const who = await screen.findByTestId("who-is-this");
+    expect(who.textContent).toMatch(/person-1/);
+    expect(who.textContent).not.toMatch(/usr-/);
   });
   it("before a run the token page says what is missing instead of showing empty boxes", async () => {
     mockApi({ state: { workspace: "w", config: null, discovery: null, signedIn: false, token: null, steps: [] } });

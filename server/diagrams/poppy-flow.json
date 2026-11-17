@@ -106,7 +106,14 @@
         0
       ],
       "short": "Read poppy.json",
-      "phase": "discover"
+      "phase": "discover",
+      "spec": "Spec section 3 (poppy.json) and RFC 9728 (protected resource metadata)",
+      "plain": "The agent starts with only a web address. It asks that address what the Company offers and which authorization server signs people in.",
+      "fields": [
+        "GET /.well-known/poppy.json",
+        "GET /.well-known/oauth-protected-resource",
+        "No identity yet, no secret, no redirects followed"
+      ]
     },
     {
       "title": "The Company origin answers",
@@ -116,7 +123,15 @@
         1
       ],
       "short": "Scopes, issuer, APIs",
-      "phase": "discover"
+      "phase": "discover",
+      "spec": "Spec section 3 (poppy.json) and RFC 9728",
+      "plain": "The Company answers with its business card: the protocol version, the scopes it offers, the APIs they unlock and the address of its authorization server.",
+      "fields": [
+        "protocol_version 1.0",
+        "Scopes, each with a hint: does it change anything, does it touch personal data",
+        "The APIs, and the authorization server (issuer)",
+        "resource = the Company's own origin"
+      ]
     },
     {
       "title": "Push the sign-in request (PAR)",
@@ -126,7 +141,15 @@
         2
       ],
       "short": "PAR: signed push",
-      "phase": "signin"
+      "phase": "signin",
+      "spec": "RFC 9126 (PAR), RFC 7523 (private_key_jwt) and spec section 4.2",
+      "plain": "The agent sends its whole sign-in request straight to the authorization server, signed with its own private key, instead of putting it in a browser link.",
+      "fields": [
+        "client_id: the agent's URL (on PingOne, the registered app ID)",
+        "scope, redirect_uri, PKCE challenge, state",
+        "client_assertion: a short-lived signed JWT (private_key_jwt)",
+        "No client secret"
+      ]
     },
     {
       "title": "A one-time request_uri",
@@ -136,7 +159,14 @@
         3
       ],
       "short": "request_uri",
-      "phase": "signin"
+      "phase": "signin",
+      "spec": "RFC 9126 (the pushed request answers with a request_uri)",
+      "plain": "The authorization server keeps the request and hands back a one-time reference to it. Nothing in the browser address can change the request now.",
+      "fields": [
+        "HTTP 201",
+        "request_uri: one-time and short-lived",
+        "expires_in"
+      ]
     },
     {
       "title": "The person signs in",
@@ -146,7 +176,14 @@
         4
       ],
       "short": "Person signs in",
-      "phase": "signin"
+      "phase": "signin",
+      "spec": "Spec section 4.1 (the agent's client_id is a URL) and RFC 9126",
+      "plain": "The browser opens the authorization server with only the client ID and that reference. The person signs in and approves this agent for the scope.",
+      "fields": [
+        "client_id and request_uri, nothing else",
+        "Sign-in on the authorization server's own page",
+        "Consent: the person presses Allow"
+      ]
     },
     {
       "title": "The code comes back",
@@ -156,7 +193,14 @@
         5
       ],
       "short": "Code + iss",
-      "phase": "signin"
+      "phase": "signin",
+      "spec": "RFC 9207 (the issuer comes back in the redirect) and spec section 4.2",
+      "plain": "The authorization server sends the person back to the agent with a one-time code, and says which issuer it was, so the agent can check it.",
+      "fields": [
+        "code: works once",
+        "state: matched against the agent's own",
+        "iss: the issuer, checked by the agent (RFC 9207)"
+      ]
     },
     {
       "title": "Exchange the code",
@@ -166,7 +210,15 @@
         6
       ],
       "short": "Token request",
-      "phase": "token"
+      "phase": "token",
+      "spec": "RFC 7636 (PKCE), RFC 7523 (client assertion) and spec section 4.2",
+      "plain": "The agent trades the code for an access token. It proves it is the same agent with the PKCE verifier and a fresh signed assertion.",
+      "fields": [
+        "grant_type authorization_code, code, redirect_uri",
+        "code_verifier (PKCE)",
+        "client_assertion (private_key_jwt)",
+        "No client secret"
+      ]
     },
     {
       "title": "The access token",
@@ -176,7 +228,15 @@
         7
       ],
       "short": "Access token",
-      "phase": "token"
+      "phase": "token",
+      "spec": "Spec sections 4.1 and 5.1 (who the token is for, and the User ID the Company sees)",
+      "plain": "The authorization server issues an access token for this agent, this person and this scope. It is valid for a short time.",
+      "fields": [
+        "client_id: the agent",
+        "scope: accounts:read",
+        "expires_in: short",
+        "sub: the person who signed in"
+      ]
     },
     {
       "title": "Call the API",
@@ -186,7 +246,14 @@
         8
       ],
       "short": "Signed API call",
-      "phase": "call"
+      "phase": "call",
+      "spec": "Spec sections 5.2 and 5.3 (Poppy-Session and the delegation) and RFC 7800 (cnf)",
+      "plain": "The agent calls the Company with the token and a Poppy-Session it signed for this one request, so a stolen token alone is not enough.",
+      "fields": [
+        "Authorization: Bearer <access token>",
+        "Poppy-Session: a JWT for this method, this URL and this token",
+        "Poppy-Version: 1.0"
+      ]
     },
     {
       "title": "The Company verifies",
@@ -196,7 +263,15 @@
         9
       ],
       "short": "200 OK",
-      "phase": "call"
+      "phase": "call",
+      "spec": "Spec sections 5.1 and 5.3 (the User ID; session errors are HTTP 400, token errors 401)",
+      "plain": "The Company checks the token, the session signature and the agent's delegation, then answers with a random User ID, not the login name.",
+      "fields": [
+        "200 with state signed_in",
+        "user_id: random per Company (spec 5.1)",
+        "A replayed or mismatched session: HTTP 400 invalid_session",
+        "A bad token: HTTP 401"
+      ]
     }
   ]
 }

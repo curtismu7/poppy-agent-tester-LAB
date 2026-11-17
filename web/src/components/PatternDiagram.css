@@ -77,3 +77,30 @@
 /* An expanded box (the kit's .dk-open) is wider and its details read left to right. */
 .pat-node.dk-open { min-width: 18rem; max-width: 22rem; text-align: left; font-weight: 400; }
 .pat-node.dk-open .dk-passport { font-weight: 400; }
+
+/* The pop-up explanation: a card over the free top-left of the canvas, in the step's phase colour. Narrow screens already have the narration above the canvas. */
+.pat-canvas { position: relative; }
+.pat-popauto { display: inline-flex; align-items: center; gap: 6px; margin: 0 14px 8px 8px; font-size: var(--font-size-sm); color: var(--text); white-space: nowrap; vertical-align: middle; }
+.pat-popauto input { width: 16px; height: 16px; min-height: 0; margin: 0; }
+.pat-pop { --ph: var(--border); position: absolute; z-index: 20; top: 52%; right: 12px; transform: translateY(-50%); width: min(372px, calc(100% - 24px)); max-height: 74%; overflow-y: auto; padding: 12px 14px; border: 1px solid var(--border); border-left: 6px solid var(--ph); border-radius: var(--radius-lg); background: var(--surface); color: var(--text); box-shadow: 0 6px 22px rgba(5, 23, 39, 0.28); }
+.pat-pop--discover { --ph: var(--ph-discover); }
+.pat-pop--signin { --ph: var(--ph-signin); }
+.pat-pop--token { --ph: var(--ph-token); }
+.pat-pop--call { --ph: var(--ph-call); }
+.pat-pop__head { display: flex; align-items: center; gap: 8px; }
+.pat-pop__n { font-size: var(--font-size-2xs); font-weight: 800; color: var(--text); }
+.pat-pop__phase { padding: 1px 8px; border-radius: 999px; background: var(--ph); color: var(--surface); font-size: var(--font-size-2xs); font-weight: 800; }
+.pat-pop__x { margin-left: auto; min-height: 0; padding: 0 8px; border: 0; background: transparent; color: var(--text); font-size: 20px; line-height: 1.2; cursor: pointer; }
+.pat-pop__title { margin: 6px 0 0; font-size: var(--font-size-lg); color: var(--text); }
+.pat-pop__kind { margin: 0 0 4px; font-size: var(--font-size-2xs); color: var(--muted); }
+.pat-pop h4 { margin: 8px 0 2px; font-size: var(--font-size-2xs); font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ph); }
+.pat-pop p { margin: 0; font-size: var(--font-size-sm); line-height: 1.5; color: var(--text-body); }
+.pat-pop__spec { font-family: var(--font-mono); font-size: var(--font-size-2xs); }
+.pat-pop__plain { font-size: var(--font-size-base); color: var(--text); margin-top: 2px; }
+.pat-pop__fields { margin: 0; padding-left: 18px; font-size: var(--font-size-sm); line-height: 1.45; color: var(--text-body); }
+.pat-pop__fields li { margin: 1px 0; }
+.pat-pop__nav { display: flex; gap: 8px; margin-top: 12px; }
+.pat-pop__nav button { min-height: 0; padding: 4px 12px; }
+.app--presenter .pat-pop { width: min(460px, calc(100% - 24px)); }
+.app--presenter .pat-pop p { font-size: var(--font-size-lg); }
+@media (max-width: 900px) { .pat-pop { display: none; } }

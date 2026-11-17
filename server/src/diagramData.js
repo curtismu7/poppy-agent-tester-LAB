@@ -21,6 +21,6 @@ export function buildDiagram(name = 'poppy-flow') {
     title: d.title,
     intro: d.lede,
     nodes: d.nodes.map((n) => ({ id: n.id, label: n.label, kind: n.group, x: n.x, y: n.y })),
-    steps: d.steps.map((s) => { const e = d.edges[s.edges[0]]; return { from: e.source, to: e.target, label: s.title, short: s.short ?? s.title, phase: s.phase ?? '', reply: !!e.dashed, say: s.what, why: s.why ?? '' }; }),
+    steps: d.steps.map((s) => { const e = d.edges[s.edges[0]]; return { from: e.source, to: e.target, label: s.title, short: s.short ?? s.title, phase: s.phase ?? '', reply: !!e.dashed, spec: s.spec ?? '', plain: s.plain ?? '', fields: s.fields ?? [], say: s.what, why: s.why ?? '' }; }),
   };
 }

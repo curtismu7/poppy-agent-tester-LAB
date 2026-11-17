@@ -29,3 +29,12 @@ test('the full step titles stay for the narration', () => {
   const d = buildDiagram('poppy-flow');
   d.steps.forEach((s) => assert.ok(s.label.length >= s.short.length - 8 && s.label !== ''));
 });
+
+test('every step has a plain sentence, key fields and a spec citation for the pop-up', () => {
+  const d = buildDiagram('poppy-flow');
+  for (const s of d.steps) {
+    assert.ok(s.plain.length >= 40 && s.plain.length <= 260, `plain: ${s.plain}`);
+    assert.ok(s.fields.length >= 2 && s.fields.length <= 5 && s.fields.every((f) => f.length > 0 && f.length <= 100), `fields of ${s.label}`);
+    assert.match(s.spec, /RFC \d+|Spec section/, `spec: ${s.spec}`);
+  }
+});

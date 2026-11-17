@@ -61,3 +61,10 @@ test('docker-compose.yml allows the family lab-proxy name by default, never the 
   assert.match(compose, /LAB_ALLOWED_HOSTS: \$\{LAB_ALLOWED_HOSTS:-poppy-agent-tester\.local\.ping-devops\.com\}\n/);
   assert.doesNotMatch(compose, /LAB_ALLOWED_HOSTS:[^\n]*[-,]local\.ping-devops\.com\b/);
 });
+
+// The Company origin is answered by company-shim on 127.0.0.1 inside the agent's network, so its host name must resolve to loopback there.
+test('docker-compose.yml maps the Company origin host name to loopback for the agent', () => {
+  const text = here('docker-compose.yml');
+  assert.match(text, /extra_hosts:\s*\n\s*-\s*"\$\{PAT_DEMO_COMPANY_HOST:-localhost\}:127\.0\.0\.1"/);
+  assert.match(here('.env.example'), /PAT_DEMO_COMPANY_HOST/);
+});

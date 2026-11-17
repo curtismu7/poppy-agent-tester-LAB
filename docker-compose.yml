@@ -33,6 +33,10 @@ services:
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       PAT_CHAT_MODEL: ${PAT_CHAT_MODEL:-}
       NODE_EXTRA_CA_CERTS: /data/ca.pem
+    # company-shim answers the Company origin on 127.0.0.1:3001 inside this container's network. Set PAT_DEMO_COMPANY_HOST to the host name
+    # of PAT_DEMO_COMPANY_ORIGIN (default localhost) so that name resolves to the shim and not to a public address.
+    extra_hosts:
+      - "${PAT_DEMO_COMPANY_HOST:-localhost}:127.0.0.1"
     read_only: true
     volumes:
       - agent-data:/data

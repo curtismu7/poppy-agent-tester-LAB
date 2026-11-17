@@ -26,7 +26,7 @@ const SCRIPT = {
   discover: {
     person: "Do they have my size in stock?",
     agentLine: (state) => `Found them. I read ${host(state?.config?.origin)}'s documents: ${scopeSummary(state)}, sign-in at ${host(state?.config?.issuer) || "the issuer it names"}.`,
-    need: "You asked about stock. Reading the Company's documents first.",
+    need: "You asked about stock. Reading the Company origin's documents first.",
   },
   authorize: {
     person: "Where's my order?",
@@ -69,10 +69,10 @@ function ArrowGlyph({ dir }) {
 function StepRow({ step, onOpen, open }) {
   const kind = step.kind;
   const title = {
-    discover: "Read the Company's documents",
+    discover: "Read the Company origin's documents",
     authorize: "Sign in at PingFederate (client_id is a URL, PKCE)",
     token: "Exchange the code (private_key_jwt)",
-    call: "Call the Company API with Bearer + Poppy-Session",
+    call: "Call the Company origin's API with Bearer + Poppy-Session",
   }[kind] ?? kind;
   const specSection = { discover: "#discovery", authorize: "#oauth-server", token: "#session-header", call: "#session-header" }[kind] ?? "";
   const result = step.response
@@ -160,7 +160,7 @@ export default function AtlasChat({ info, resetSignal }) {
     say("person", SCRIPT.discover.person);
     const r = await postJson("/api/discover", { origin: origin.trim(), issuer: issuer.trim() });
     const fresh = await refresh();
-    if (!r.ok) { setPhase("idle"); setMsg(r.body.message ?? r.body.error ?? `HTTP ${r.status}`); say("agent", "I could not read that Company. Check the Company origin and the issuer above the chat."); return; }
+    if (!r.ok) { setPhase("idle"); setMsg(r.body.message ?? r.body.error ?? `HTTP ${r.status}`); say("agent", "I could not read that Company origin. Check the Company origin and the issuer above the chat."); return; }
     setActiveArrow(0);
     say("agent", SCRIPT.discover.agentLine(fresh));
     setPhase("discovered");

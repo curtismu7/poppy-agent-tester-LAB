@@ -46,7 +46,7 @@ export default function TokenPage({ state }) {
               <details><summary>Delegation JWT (the poppy_dlg header)</summary><Json value={sess.delegation} label="Delegation" hot={POPPY_HOT} /></details>
               <details><summary>Raw JWT</summary><Json value={sess.raw} label="Poppy-Session" /></details>
             </>
-          ) : <p className="muted" data-testid="no-session">No call yet. Call the Company on the calls page and the session appears here.</p>}
+          ) : <p className="muted" data-testid="no-session">No call yet. Call the Company origin on the calls page and the session appears here.</p>}
         </div>
       </div>
       <h3 className="rp-sub">Standards at work in this run</h3>

@@ -9,7 +9,7 @@
       "color": "dark"
     },
     "idp": {
-      "label": "PingFederate",
+      "label": "Authorization server (PingFederate)",
       "color": "blue"
     },
     "company": {
@@ -23,21 +23,21 @@
       "label": "Personal Agent (this app)",
       "group": "actor",
       "x": 0,
-      "y": 150
+      "y": 170
     },
     {
       "id": "pf",
       "label": "PingFederate",
       "group": "idp",
-      "x": 420,
-      "y": -60
+      "x": 520,
+      "y": -30
     },
     {
       "id": "company",
       "label": "Company API",
       "group": "company",
-      "x": 420,
-      "y": 360
+      "x": 520,
+      "y": 370
     }
   ],
   "edges": [
@@ -104,7 +104,9 @@
       "why": "This is how an agent starts from a Company origin it has never seen. Nothing is configured on the agent side: the Company's own documents say what it offers and where to sign in.",
       "edges": [
         0
-      ]
+      ],
+      "short": "Read poppy.json",
+      "phase": "discover"
     },
     {
       "title": "The Company origin answers",
@@ -112,7 +114,9 @@
       "why": "scope_hints say whether a scope changes anything or touches personal data, so the agent can tell the person what they are about to allow. The exact-resource rule stops one Company's document from speaking for another resource on the same host.",
       "edges": [
         1
-      ]
+      ],
+      "short": "Scopes, issuer, APIs",
+      "phase": "discover"
     },
     {
       "title": "Push the sign-in request (PAR)",
@@ -120,7 +124,9 @@
       "why": "The authorization server knows which agent is asking before the person sees any page, and it fetches the agent's client.json from that URL, so it never holds a stale copy of the agent's keys or redirect address (PingFederate still needs an operator-made CIMD policy for that exact URL). FAPI 2.0 Companies require PAR (RFC 9126).",
       "edges": [
         2
-      ]
+      ],
+      "short": "PAR: signed push",
+      "phase": "signin"
     },
     {
       "title": "A one-time request_uri",
@@ -128,7 +134,9 @@
       "why": "Nothing in the browser can change the request now: the address the person opens carries only client_id and this reference.",
       "edges": [
         3
-      ]
+      ],
+      "short": "request_uri",
+      "phase": "signin"
     },
     {
       "title": "The person signs in",
@@ -136,7 +144,9 @@
       "why": "The only step the person sees. They never hand the agent a password, and the consent names the agent by its URL, so they can revoke it like any other app.",
       "edges": [
         4
-      ]
+      ],
+      "short": "Person signs in",
+      "phase": "signin"
     },
     {
       "title": "The code comes back",
@@ -144,7 +154,9 @@
       "why": "The iss check stops a mix-up attack, where a code from another authorization server is played back to the agent.",
       "edges": [
         5
-      ]
+      ],
+      "short": "Code + iss",
+      "phase": "signin"
     },
     {
       "title": "Exchange the code",
@@ -152,7 +164,9 @@
       "why": "PKCE proves the agent that started the sign-in is the one finishing it; the assertion proves it holds the key published at its jwks_uri. There is no client secret anywhere.",
       "edges": [
         6
-      ]
+      ],
+      "short": "Token request",
+      "phase": "token"
     },
     {
       "title": "The access token",
@@ -160,7 +174,9 @@
       "why": "Every API the Company runs can now tell agent traffic from a person's, and exactly which agent it is.",
       "edges": [
         7
-      ]
+      ],
+      "short": "Access token",
+      "phase": "token"
     },
     {
       "title": "Call the API",
@@ -168,7 +184,9 @@
       "why": "The token says what the person allowed; the session says which agent is asking right now, for this method, this URL and this token. A stolen token alone is not enough.",
       "edges": [
         8
-      ]
+      ],
+      "short": "Signed API call",
+      "phase": "call"
     },
     {
       "title": "The Company verifies",
@@ -176,7 +194,9 @@
       "why": "A replayed session, one signed for another token, or an unsupported version gets 400 (invalid_session or version_unsupported), and an agent the Company has not allow-listed is refused.",
       "edges": [
         9
-      ]
+      ],
+      "short": "200 OK",
+      "phase": "call"
     }
   ]
 }

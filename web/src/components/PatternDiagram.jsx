@@ -85,14 +85,14 @@ function Canvas({ pattern, graph, positions, onMove, stepper, activeEdge = null,
     return {
       id: `e${i}`, source: s.from, target: s.to, sourceHandle: `s-${a}`, targetHandle: `t-${b}`, type: "arrow",
       animated: now, data: { dy: offs[i] },
-      className: `pat-edge${cp ? " pat-edge--cp" : ""}${now ? " pat-edge--now" : ""}${stepper && stepper.step >= 0 && !seen ? " pat-edge--dim" : ""}`,
+      className: `pat-edge${s.reply ? " pat-edge--reply" : ""}${s.phase ? ` pat-edge--${s.phase}` : ""}${cp ? " pat-edge--cp" : ""}${now ? " pat-edge--now" : ""}${stepper && stepper.step >= 0 && !seen ? " pat-edge--dim" : ""}`,
       markerEnd: { type: MarkerType.ArrowClosed },
     };
   }), pageDriven ? [activeEdge] : []);
   // One label per arrow, in a layer above the boxes, on the arrow's own (shifted) curve. The lit arrow is the walkthrough's, or the page's (activeEdge).
   const labels = pattern.steps.map((s, i) => {
     const sh = endShift(offs[i]); const hs = (h) => `${edges[i][h]}@${sh}`;
-    return { id: `e${i}`, text: `${i + 1}. ${s.label}`, source: s.from, target: s.to, sourceHandle: hs("sourceHandle"), targetHandle: hs("targetHandle"),
+    return { id: `e${i}`, text: `${i + 1}. ${s.short || s.label}`, source: s.from, target: s.to, sourceHandle: hs("sourceHandle"), targetHandle: hs("targetHandle"),
       active: stepper ? stepper.step === i : activeEdge === i, dim: !!stepper && stepper.step >= 0 && !(i <= stepper.step), prefer: offs[i] - sh };
   });
   // What an expanded box can do: open the box at the far end of an arrow, close itself, and make a link that opens this page with the box expanded.
@@ -100,8 +100,10 @@ function Canvas({ pattern, graph, positions, onMove, stepper, activeEdge = null,
     open: (id) => setOpen(id), close: () => setOpen(null),
     link: (id) => { const u = new URL(window.location.href); u.searchParams.set("box", id); return u.toString(); },
   }), [setOpen]);
+  const phaseCss = pattern.steps.map((s, i) => (s.phase ? `.pat-canvas [data-label-id="e${i}"]{--ph:var(--ph-${s.phase})}` : "")).join("");
   return (
     <div ref={ref} className="pat-canvas" data-testid="pattern-canvas">
+      {phaseCss && <style>{phaseCss}</style>}
       <PassportActions.Provider value={actions}>
         <ReactFlow nodes={nodes} edges={edges} nodeTypes={nodeTypes} edgeTypes={edgeTypes} fitView fitViewOptions={FIT} nodesConnectable={false} minZoom={0.3}
           onNodeClick={(_, n) => setOpen((o) => (o === n.id ? null : n.id))} onPaneClick={() => setOpen(null)}
@@ -144,7 +146,7 @@ function Narration({ steps, stepper }) {
       <ol className="pat-narr__list">
         {steps.map((s, n) => (
           <li key={n}>
-            <button type="button" className={`pat-narr__item${n === i ? " is-now" : n < i ? " is-done" : ""}`} aria-current={n === i ? "step" : undefined}
+            <button type="button" className={`pat-narr__item${s.phase ? ` pat-narr__item--${s.phase}` : ""}${n === i ? " is-now" : n < i ? " is-done" : ""}`} aria-current={n === i ? "step" : undefined}
               onClick={() => stepper.goTo(n)} data-testid={`narr-step-${n}`}>
               <span className="pat-narr__n">{n + 1}</span> {s.label}
             </button>
@@ -152,6 +154,21 @@ function Narration({ steps, stepper }) {
         ))}
       </ol>
     </aside>
+  );
+}
+
+const PHASE_NAMES = { discover: "Discover the Company", signin: "Person signs in", token: "Get the token", call: "Call the API" };
+// The colour key: one chip per phase that the steps use, in the order they first appear, with the step numbers it covers.
+function Legend({ steps }) {
+  const phases = [];
+  steps.forEach((s, i) => { if (!s.phase) return; let p = phases.find((x) => x.id === s.phase); if (!p) { p = { id: s.phase, from: i + 1, to: i + 1 }; phases.push(p); } p.to = i + 1; });
+  if (!phases.length) return null;
+  return (
+    <ul className="pat-legend" aria-label="Arrow colours" data-testid="pattern-legend">
+      {phases.map((p) => (
+        <li key={p.id} className={`pat-legend__item pat-legend__item--${p.id}`}><span className="pat-legend__dot" aria-hidden="true" />{PHASE_NAMES[p.id] || p.id} <span className="pat-legend__steps">{p.from === p.to ? `step ${p.from}` : `steps ${p.from}-${p.to}`}</span></li>
+      ))}
+    </ul>
   );
 }
 
@@ -184,6 +201,7 @@ export default function PatternDiagram({ pattern, resetSignal = 0, activeEdge = 
           <p>{pattern.steps[activeEdge].say}</p>
         </article>
       )}
+      <Legend steps={pattern.steps} />
       <button type="button" className="pat-reset" onClick={reset} data-testid="pattern-reset">Reset positions and walkthrough</button>
       <div className={`pat-stage${pageDriven ? " pat-stage--stacked" : ""}`}>
         <ReactFlowProvider>

@@ -17,9 +17,6 @@
 .pat-canvas .react-flow__controls-button:hover { background: var(--surface-2); }
 .pat-canvas .react-flow__controls-button svg { fill: currentColor; }
 .pat-canvas .react-flow__background { background: var(--surface); }
-.pat-elabel { position: absolute; pointer-events: none; padding: 1px 6px; border-radius: var(--radius-sm); border: 1px solid var(--border); background: var(--surface); color: var(--text); font-size: 13px; white-space: nowrap; }
-.pat-elabel--now { border-color: var(--status-info); font-weight: 700; }
-.pat-elabel--dim { opacity: 0.55; }
 /* The lede under the title. (The app's .intro is the dark header's on-box text and would vanish on the page ground.) */
 .pat__lede { margin: 0 0 10px; max-width: 80ch; color: var(--text-body); font-size: var(--font-size-sm); line-height: 1.5; }
 /* Canvas and narration side by side; the narration keeps its size, so nothing below or beside it moves as the steps play. */
@@ -52,3 +49,8 @@
   .pat-narr__now { min-height: 0; height: 260px; overflow-y: auto; }
   .pat-narr__list { max-height: 170px; overflow-y: auto; }
 }
+/* Arrow labels are drawn by the diagram kit (../diagram-kit): the walked arrow's label keeps this page's info colour. */
+.pat-canvas { --dk-active: var(--status-info); --dk-active-text: var(--status-info); }
+/* An expanded box (the kit's .dk-open) is wider and its details read left to right. */
+.pat-node.dk-open { min-width: 18rem; max-width: 22rem; text-align: left; font-weight: 400; }
+.pat-node.dk-open .dk-passport { font-weight: 400; }

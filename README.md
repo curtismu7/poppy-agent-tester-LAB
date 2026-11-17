@@ -8,6 +8,60 @@ Plays the personal agent from the Personal Agent Protocol (Poppy, spec 1.0). You
 
 **What is real and what is not.** A local run talks to the real Company and the real PingFederate you name, and to nothing else. The hosted build (SE cluster) reaches nothing: it explains the flow and shows an example run with invented values.
 
+<!-- instructions:start -->
+## Set up and run (one command)
+
+You need a Mac or Linux terminal (on Windows, use WSL), **Docker running** or **Node 26 or newer**, and `git` or `curl`. Nothing else, for the first run.
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/curtismu7/poppy-agent-tester-LAB/main/scripts/install.sh | sh
+```
+
+The script downloads the lab to `~/poppy-agent-tester-LAB`, builds and starts it on the first free port in 5450-5499 (127.0.0.1 only, never the network), waits until it answers, and opens your browser. The first build takes a minute or two.
+
+Stop it with `sh ~/poppy-agent-tester-LAB/scripts/install.sh --stop`. Run the same command again to update and restart.
+
+| Option | What it does |
+|---|---|
+| `--mock` | The default. The explainer with an example run of invented values. No tenant, no PingFederate, no sign-in. |
+| `--real` | The live run against your own Company and PingFederate (see below). |
+| `--port N` | Use port N (5450-5499) instead of the first free one. |
+| `--dir DIR` | Put the lab in DIR. |
+| `--runtime docker\|node` | Force Docker or Node. By default Docker is used when it is running, and `--real` prefers Node. |
+| `--no-open` | Do not open the browser. |
+| `--dry-run` | Print what would run and change nothing. |
+
+With a pipe, pass options after `sh -s --`, for example `... | sh -s -- --real`.
+
+### The default run (mock)
+
+This is what to hand to someone who asks for the demo. It shows the whole Personal Agent Protocol flow, the diagram, the token and session pages and a worked example, all with invented values. It never contacts a server, because there is none to contact. It cannot sign anyone in.
+
+### A live run (`--real`)
+
+A live run plays the agent against a real Company and a real PingFederate. Both must already exist: this lab does not create them. You need three things (details in [docs/setup.md](docs/setup.md)):
+
+1. **A Company**: a server that serves `/.well-known/poppy.json` and `/.well-known/oauth-protected-resource`, checks the bearer token and the `Poppy-Session` header, and lists this agent's `client.json` URL as an allowed agent.
+2. **A PingFederate** with its own JWT access token manager (the `client_id` claim taken from the request's `ClientId`), an access token mapping from your login adapter, and a CIMD policy for `${PAT_AGENT_BASE_URL}/client.json`, with PKCE required.
+3. **The agent reachable over https** from PingFederate, with a certificate PingFederate trusts: `PAT_AGENT_BASE_URL`, `PAT_AGENT_HOST`, `PAT_TLS_CERT`, `PAT_TLS_KEY` and `PAT_BIND`.
+
+Then run the one command with `--real`. It copies `.env.example` to `.env` the first time; fill in the values there, run it again, and type your Company origin and issuer on the page.
+
+**PingOne cannot be the authorization server for this lab yet.** The agent's client ID is its own URL (a Client ID Metadata Document) and PingOne does not support that. The calls page says the same. Use PingFederate.
+
+### If something goes wrong
+
+| Problem | Fix |
+|---|---|
+| "Docker is not running" | Start Docker (OrbStack or Docker Desktop) and run the command again. |
+| "need Docker (running) or Node 26" | Install one of them. Node 26 is at https://nodejs.org. |
+| "port N is in use" | Leave `--port` off to take the first free port, or pick another between 5450 and 5499. |
+| The page does not open | Open the address the script printed, `http://localhost:<port>/`. |
+| It did not start in 60 seconds | Docker: `docker logs poppy-agent-tester-lab`. Node: `~/poppy-agent-tester-LAB/.launcher.log`. |
+
+The lab listens on 127.0.0.1 only, runs read-only with no extra privileges in Docker, and reaches only the two hosts you type. See [docs/safety.md](docs/safety.md).
+<!-- instructions:end -->
+
 ## Run from a clone
 
 Prerequisites: Node 26. Docker (OrbStack) only for the Docker form.

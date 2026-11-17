@@ -3,3 +3,4 @@ node_modules
 customer.config.json
 .env
 web/dist
+.launcher.*

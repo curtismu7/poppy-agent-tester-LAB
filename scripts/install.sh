@@ -6,12 +6,14 @@
 #
 # Default (mock): the explainer with an example run of invented values. Needs no tenant, no PingFederate, no sign-in.
 # --real: the live run. Needs your own Company and PingFederate and the agent reachable over https (docs/setup.md).
+# --pingone: the live run against YOUR PingOne environment with the reference Company in company/. Asks for the environment ID and a
+#   worker client ID and secret, creates the PingOne objects (resource, app, grant) and starts the Company and the lab. Node 26 only.
 # Runs in Docker when Docker is running, otherwise on Node 26 (a --real run prefers Node 26 when it is installed). Listens on 127.0.0.1 only (ports 5450-5499).
 set -eu
 
 REPO=curtismu7/poppy-agent-tester-LAB
 NAME=poppy-agent-tester-lab
-MODE=mock; OPEN=1; DRY=0; STOP=0; PORT=${HOST_PORT:-}; RUNTIME=auto; DIR=${PAT_DIR:-}
+MODE=mock; OPEN=1; DRY=0; STOP=0; PORT=${HOST_PORT:-}; RUNTIME=auto; DIR=${PAT_DIR:-}; REGION=com; DEMOUSER=0; CPORT=5452
 
 say() { printf '%s\n' "$*"; }
 die() { printf 'error: %s\n' "$*" >&2; exit 1; }
@@ -26,6 +28,9 @@ Poppy Agent Tester LAB: download, start, open the browser.
 
   --mock            explainer with an example run (default; no tenant, no sign-in)
   --real            live run against your own Company and PingFederate (see docs/setup.md)
+  --pingone         live run against your own PingOne environment: creates the PingOne objects and starts the reference Company
+  --region R        PingOne region for --pingone: com (default), ca, eu, com.au, sg, asia
+  --demo-user       with --pingone: also create one demo user (needs the worker to manage users)
   --dir DIR         where the lab lives (default: ~/poppy-agent-tester-LAB)
   --port N          port on 127.0.0.1, 5450-5499 (default: the first free one)
   --runtime R       docker or node (default: docker if it is running, else node; --real prefers node)
@@ -42,6 +47,9 @@ while [ $# -gt 0 ]; do
   case "$1" in
     --mock) MODE=mock ;;
     --real) MODE=real ;;
+    --pingone) MODE=pingone ;;
+    --region) [ $# -ge 2 ] || die "--region needs a value"; REGION=$2; shift ;;
+    --demo-user) DEMOUSER=1 ;;
     --dir) [ $# -ge 2 ] || die "--dir needs a path"; DIR=$2; shift ;;
     --port) [ $# -ge 2 ] || die "--port needs a number"; PORT=$2; shift ;;
     --runtime) [ $# -ge 2 ] || die "--runtime needs docker or node"; RUNTIME=$2; shift ;;
@@ -55,9 +63,15 @@ while [ $# -gt 0 ]; do
 done
 
 case "$RUNTIME" in auto|docker|node) ;; *) die "--runtime must be docker or node" ;; esac
+case "$REGION" in com|ca|eu|com.au|sg|asia) ;; *) die "--region must be com, ca, eu, com.au, sg or asia" ;; esac
+if [ "$MODE" = pingone ]; then
+  [ "$RUNTIME" = docker ] && die "--pingone needs Node 26 (the lab and the reference Company reach each other on loopback); drop --runtime docker"
+  RUNTIME=node
+fi
 if [ -n "$PORT" ]; then
   case "$PORT" in *[!0-9]*) die "--port must be a number" ;; esac
   [ "$PORT" -ge 5450 ] && [ "$PORT" -le 5499 ] || die "--port must be in 5450-5499"
+  [ "$MODE" = pingone ] && [ "$PORT" = "$CPORT" ] && die "--port $CPORT is the reference Company's port; pick another"
 fi
 
 # Where is the lab? An explicit --dir or PAT_DIR wins; running this script from inside a clone uses that clone.
@@ -73,10 +87,12 @@ fi
 have() { command -v "$1" >/dev/null 2>&1; }
 
 if [ "$STOP" = 1 ]; then
-  if [ -f "$DIR/.launcher.pid" ]; then
-    runq kill "$(cat "$DIR/.launcher.pid")" || true
-    run rm -f "$DIR/.launcher.pid"
-  fi
+  for f in "$DIR/.launcher.pid" "$DIR/.launcher-company.pid"; do
+    if [ -f "$f" ]; then
+      runq kill "$(cat "$f")" || true
+      run rm -f "$f"
+    fi
+  done
   if have docker && docker info >/dev/null 2>&1; then runq docker rm -f "$NAME" || true; fi
   say "Stopped."
   exit 0
@@ -130,6 +146,7 @@ port_free() {
 if [ -z "$PORT" ]; then
   p=5450
   while [ "$p" -le 5499 ]; do
+    if [ "$MODE" = pingone ] && [ "$p" = "$CPORT" ]; then p=$((p + 1)); continue; fi   # that port is the reference Company
     if port_free "$p"; then PORT=$p; break; fi
     p=$((p + 1))
   done
@@ -137,8 +154,11 @@ if [ -z "$PORT" ]; then
 elif [ "$DRY" = 0 ] && ! port_free "$PORT"; then
   die "port $PORT is in use. Pick another with --port, or stop what is using it."
 fi
+if [ "$MODE" = pingone ] && [ "$DRY" = 0 ] && ! port_free "$CPORT"; then
+  die "port $CPORT (the reference Company) is in use. Stop what is using it and run this again."
+fi
 
-[ "$MODE" = real ] && MODEVAL=live || MODEVAL=mock
+if [ "$MODE" = real ] || [ "$MODE" = pingone ]; then MODEVAL=live; else MODEVAL=mock; fi
 
 # Start.
 if [ "$RUNTIME" = docker ]; then
@@ -155,7 +175,25 @@ else
   [ -d node_modules ] || run npm ci
   [ -f web/dist/index.html ] || run npm run build
   [ "$MODE" = real ] && { run npm run doctor || say "The checks above show what still needs setting in .env."; }
-  if [ "$DRY" = 1 ]; then say "+ PORT=$PORT MODE=$MODEVAL npm start (background, log in $DIR/.launcher.log)"
+  if [ "$MODE" = pingone ]; then
+    # Create the PingOne objects (asks for the environment ID, worker client ID and secret on the terminal; the secret is never stored),
+    # then start the reference Company and the lab, both reading the settings the setup script wrote to .env.
+    DEMOARG=
+    [ "$DEMOUSER" = 1 ] && DEMOARG=--demo-user
+    if [ "$DRY" = 1 ]; then
+      say "+ node scripts/pingone/setup.mjs --region $REGION --base-url http://127.0.0.1:$PORT $DEMOARG   (asks on the terminal)"
+      say "+ node --env-file=$DIR/.env company/src/index.js   (background, log in $DIR/.launcher-company.log)"
+      say "+ PORT=$PORT MODE=live node --env-file=$DIR/.env server/src/index.js   (background, log in $DIR/.launcher.log)"
+    else
+      [ -r /dev/tty ] || die "--pingone asks for the PingOne worker credentials, so it needs a terminal."
+      # shellcheck disable=SC2086
+      node scripts/pingone/setup.mjs --region "$REGION" --base-url "http://127.0.0.1:$PORT" $DEMOARG </dev/tty || die "the PingOne setup failed; nothing was started."
+      nohup node --env-file="$DIR/.env" company/src/index.js >"$DIR/.launcher-company.log" 2>&1 &
+      echo $! >"$DIR/.launcher-company.pid"
+      PORT=$PORT MODE=live nohup node --env-file="$DIR/.env" server/src/index.js >"$DIR/.launcher.log" 2>&1 &
+      echo $! >"$DIR/.launcher.pid"
+    fi
+  elif [ "$DRY" = 1 ]; then say "+ PORT=$PORT MODE=$MODEVAL npm start (background, log in $DIR/.launcher.log)"
   else
     PORT=$PORT MODE=$MODEVAL nohup npm start >"$DIR/.launcher.log" 2>&1 &
     echo $! >"$DIR/.launcher.pid"
@@ -173,6 +211,14 @@ if [ "$DRY" = 0 ]; then
     [ "$i" -le 60 ] || die "the lab did not start in 60 seconds. Look at: $( [ "$RUNTIME" = docker ] && echo "docker logs $NAME" || echo "$DIR/.launcher.log" )"
     sleep 1
   done
+  if [ "$MODE" = pingone ]; then
+    i=0
+    until curl -fsS "http://127.0.0.1:$CPORT/healthz" >/dev/null 2>&1; do
+      i=$((i + 1))
+      [ "$i" -le 30 ] || die "the reference Company did not start. Look at: $DIR/.launcher-company.log"
+      sleep 1
+    done
+  fi
 fi
 
 # Open the browser.
@@ -185,7 +231,10 @@ fi
 say ""
 [ "$DRY" = 1 ] && { say "Dry run: nothing was started or changed."; exit 0; }
 say "Poppy Agent Tester LAB ($MODE) is running: $URL"
-if [ "$MODE" = mock ]; then
+if [ "$MODE" = pingone ]; then
+  say "Live run against your PingOne environment. The reference Company is at http://127.0.0.1:$CPORT. Press Start flow, then sign in as a user of that environment."
+  say "Remove the PingOne objects when you are done: node $DIR/scripts/pingone/teardown.mjs"
+elif [ "$MODE" = mock ]; then
   say "This is the explainer with an example run of invented values. For a live sign-in run: sh $DIR/scripts/install.sh --real (needs your own Company and PingFederate, docs/setup.md)."
 else
   say "Live run. Type your Company origin and issuer on the page. Sign-in needs the PingFederate policy and https setup in docs/setup.md."

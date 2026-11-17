@@ -15,14 +15,17 @@
   "scripts": {
     "start": "npm start -w server",
     "build": "npm run build -w web",
-    "test": "npm test -w server && npm test -w web && node --test scripts/*.test.mjs",
+    "test": "npm test -w server && npm test -w web && node --test scripts/*.test.mjs scripts/pingone/*.test.mjs && npm --prefix company test",
     "doctor": "node scripts/doctor.mjs",
     "reset": "node scripts/reset.mjs",
     "prepare": "git config core.hooksPath .githooks || true",
     "talk-track": "node scripts/build-talk-track.mjs",
     "content-pack": "node scripts/build-content-pack.mjs && node scripts/validate-content-pack.mjs",
     "check:forbidden": "node scripts/check-forbidden-strings.mjs",
-    "instructions-pdf": "node scripts/build-instructions-pdf.mjs"
+    "instructions-pdf": "node scripts/build-instructions-pdf.mjs",
+    "company": "node company/src/index.js",
+    "pingone:setup": "node scripts/pingone/setup.mjs",
+    "pingone:teardown": "node scripts/pingone/teardown.mjs"
   },
   "devDependencies": {
     "ajv": "^8.20.0"

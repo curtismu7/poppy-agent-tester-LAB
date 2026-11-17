@@ -136,7 +136,7 @@ describe("the three pages", () => {
     fireEvent.click(screen.getByTestId("pager-next"));
     const box = screen.getByText(/What's missing here/).closest("div");
     expect(box.textContent).toMatch(/PingFederate:.*manual/);
-    expect(box.textContent).toMatch(/PingOne:.*no CIMD/);
+    expect(box.textContent).toMatch(/PingOne:.*registered client/);
     expect(box.textContent).toMatch(/allow-lists/);
   });
   it("the authorization-server radios preselect the issuer the deployment configured, and a missing one is disabled", async () => {
@@ -154,6 +154,82 @@ describe("the three pages", () => {
     render(<App />);
     fireEvent.click(screen.getByTestId("pager-next"));
     expect(await screen.findByRole("radio", { name: /PingOne/ })).toBeDisabled();
+  });
+  it("PingOne is described honestly: registered client_id, no CIMD, the two settings it needs, and what happens without them", async () => {
+    const base = { hosted: false, configured: true, source: "real", realAvailable: true, defaults: { origin: CO, issuer: PF, p1Issuer: "https://p1.example/ENV/as", scope: "" } };
+    mockApi({ info: { ...base, registered: { available: true, issuer: "https://p1.example/ENV/as", clientId: "app-1234" } }, state: { workspace: "w", config: null, discovery: null, signedIn: false, token: null, steps: [] } });
+    render(<App />);
+    fireEvent.click(screen.getByTestId("pager-next"));
+    const gap = screen.getByText(/What's missing here/).closest("div");
+    expect(gap.textContent).toMatch(/PingOne:.*registered client_id.*PAT_P1_CLIENT_ID and PAT_DEMO_P1_ISSUER/);
+    expect(gap.textContent).toMatch(/not configured here/);
+    await waitFor(() => expect(screen.getByTestId("p1-status").textContent).toBe("preconfigured"));
+    expect(screen.queryByTestId("p1-note")).toBeNull();
+    fireEvent.click(screen.getByRole("radio", { name: /PingOne/ }));
+    expect(screen.getByTestId("p1-note").textContent).toMatch(/registered client_id app-1234 \(no CIMD, no client\.json\)/);
+    fireEvent.click(screen.getByRole("radio", { name: /PingFederate/ }));
+    expect(screen.queryByTestId("p1-note")).toBeNull();
+    cleanup();
+    // the issuer is set but there is no client id: say so, never "preconfigured"
+    mockApi({ info: { ...base, registered: { available: false, issuer: null, clientId: null } }, state: { workspace: "w", config: null, discovery: null, signedIn: false, token: null, steps: [] } });
+    render(<App />);
+    fireEvent.click(screen.getByTestId("pager-next"));
+    await waitFor(() => expect(screen.getByTestId("p1-status").textContent).toMatch(/PAT_P1_CLIENT_ID missing/));
+    fireEvent.click(screen.getByRole("radio", { name: /PingOne/ }));
+    expect(screen.getByTestId("p1-note").textContent).toMatch(/PAT_P1_CLIENT_ID is not set.*registered_client_missing/);
+    cleanup();
+    // no PingOne issuer at all
+    mockApi({ info: { ...base, defaults: { ...base.defaults, p1Issuer: "" } }, state: { workspace: "w", config: null, discovery: null, signedIn: false, token: null, steps: [] } });
+    render(<App />);
+    fireEvent.click(screen.getByTestId("pager-next"));
+    await waitFor(() => expect(screen.getByTestId("p1-status").textContent).toBe("not configured here"));
+  });
+  it("finding: invalid registered settings are named as that, never as a missing client id", async () => {
+    const problem = 'PAT_P1_ASSERTION_AUD must be "endpoint" or "issuer" (got "bogus")';
+    const base = { hosted: false, configured: true, source: "real", realAvailable: true, defaults: { origin: CO, issuer: PF, p1Issuer: "https://p1.example/ENV/as", scope: "" } };
+    mockApi({ info: { ...base, registered: { available: false, issuer: null, clientId: null, problem } }, state: { workspace: "w", config: null, discovery: null, signedIn: false, token: null, steps: [] } });
+    render(<App />);
+    fireEvent.click(screen.getByTestId("pager-next"));
+    await waitFor(() => expect(screen.getByTestId("p1-status").textContent).toMatch(/registered settings invalid/));
+    expect(screen.getByTestId("p1-status").textContent).not.toMatch(/PAT_P1_CLIENT_ID/);
+    fireEvent.click(screen.getByRole("radio", { name: /PingOne/ }));
+    const note = screen.getByTestId("p1-note").textContent;
+    expect(note).toContain(problem);
+    expect(note).not.toMatch(/PAT_P1_CLIENT_ID is not set/);
+    expect(note).toMatch(/registered_config_invalid/);
+  });
+  it("finding: the PingOne note follows the issuer in the field, not the radio", async () => {
+    const info = { hosted: false, configured: true, source: "real", realAvailable: true, defaults: { origin: CO, issuer: PF, p1Issuer: "https://p1.example/ENV/as", scope: "" }, registered: { available: true, issuer: "https://p1.example/ENV/as", clientId: "app-1234", problem: null } };
+    mockApi({ info, state: { workspace: "w", config: null, discovery: null, signedIn: false, token: null, steps: [] } });
+    render(<App />);
+    fireEvent.click(screen.getByTestId("pager-next"));
+    fireEvent.click(await screen.findByRole("radio", { name: /PingOne/ }));
+    expect(screen.getByTestId("p1-note").textContent).toMatch(/registered client_id app-1234/);
+    // The visitor edits the field to another server: the radio still says PingOne, the note must go.
+    fireEvent.change(screen.getByLabelText(/Authorization server issuer/), { target: { value: PF } });
+    expect(screen.queryByTestId("p1-note")).toBeNull();
+    // Typing the PingOne issuer with a trailing slash is still the PingOne issuer.
+    fireEvent.click(screen.getByRole("radio", { name: /PingFederate/ }));
+    fireEvent.change(screen.getByLabelText(/Authorization server issuer/), { target: { value: "https://p1.example/ENV/as/" } });
+    expect(screen.getByTestId("p1-note").textContent).toMatch(/registered client_id app-1234/);
+  });
+  it("finding: the agent URL hint does not claim every sign-in needs an https URL PingFederate can reach", async () => {
+    mockApi({ info: { hosted: false, configured: false, source: "real", realAvailable: false, defaults: {} } });
+    render(<App />);
+    fireEvent.click(screen.getByTestId("pager-next"));
+    const t = (await screen.findByTestId("not-configured")).textContent;
+    expect(t).toMatch(/PAT_AGENT_BASE_URL/);
+    expect(t).not.toMatch(/the https URL PingFederate can reach/);
+    expect(t).toMatch(/PingOne/);
+  });
+  it("the first page and the standards say who the client is for PingFederate and for PingOne", () => {
+    mockApi();
+    render(<App />);
+    expect(screen.getByTestId("intro-clients").textContent).toMatch(/PingOne has no CIMD.*registered client_id.*PAT_P1_CLIENT_ID and PAT_DEMO_P1_ISSUER/);
+    fireEvent.click(screen.getByTestId("pager-next"));
+    fireEvent.click(screen.getByTestId("pager-next"));
+    expect(screen.getByText(/PingOne does not take a metadata document/)).toBeInTheDocument();
+    expect(screen.getByText(/key registered on the application \(PingOne\)/)).toBeInTheDocument();
   });
   it("the token page shows the access token claims, the Poppy-Session claims, its delegation and the four standards", async () => {
     mockApi();

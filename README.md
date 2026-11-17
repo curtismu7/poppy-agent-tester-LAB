@@ -11,7 +11,7 @@ Plays the personal agent from the Personal Agent Protocol (Poppy, spec 1.0). You
 <!-- instructions:start -->
 ## Set up and run (one command)
 
-You need a Mac or Linux terminal (on Windows, use WSL), **Docker running** or **Node 26 or newer**, and `git` or `curl`. Nothing else, for the first run.
+You need a Mac or Linux terminal (on Windows, use WSL), **Docker running** or **Node 26 or newer** (`--pingone` needs Node 26), and `git` or `curl`. Nothing else, for the first run.
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/curtismu7/poppy-agent-tester-LAB/main/scripts/install.sh | sh
@@ -25,6 +25,9 @@ Stop it with `sh ~/poppy-agent-tester-LAB/scripts/install.sh --stop`. Run the sa
 |---|---|
 | `--mock` | The default. The explainer with an example run of invented values. No tenant, no PingFederate, no sign-in. |
 | `--real` | The live run against your own Company and PingFederate (see below). |
+| `--pingone` | The live run against your own PingOne environment, with the reference Company that ships in `company/`. Creates the PingOne objects for you (see below). Needs Node 26. |
+| `--region R` | With `--pingone`: `com` (default), `ca`, `eu`, `com.au`, `sg` or `asia`. |
+| `--demo-user` | With `--pingone`: also create one demo user with a generated password, shown once. |
 | `--port N` | Use port N (5450-5499) instead of the first free one. |
 | `--dir DIR` | Put the lab in DIR. |
 | `--runtime docker\|node` | Force Docker or Node. By default Docker is used when it is running, and `--real` prefers Node. |
@@ -47,7 +50,22 @@ A live run plays the agent against a real Company and a real PingFederate. Both 
 
 Then run the one command with `--real`. It copies `.env.example` to `.env` the first time; fill in the values there, run it again, and type your Company origin and issuer on the page.
 
-**PingOne cannot be the authorization server for this lab yet.** The agent's client ID is its own URL (a Client ID Metadata Document) and PingOne does not support that. The calls page says the same. Use PingFederate.
+### A live run against PingOne (`--pingone`)
+
+PingOne has no Client ID Metadata Document support, so here the agent signs in with a **registered client**: a PingOne application whose ID is the `client_id`, authenticated with `private_key_jwt` (the agent's key, registered inline, no client secret), PAR and PKCE. The lab ships a small **reference Company** (`company/`, plain Node, no dependencies) that serves `poppy.json`, verifies the PingOne access token and the agent's `Poppy-Session`, and answers `/poppy/api/v1/me`.
+
+You need: Node 26, and a PingOne environment (a sandbox is best) with a **Worker** application that holds the **Environment Admin** role there (add Identity Data Admin if you want `--demo-user`). Have its **environment ID, worker client ID and worker client secret** ready. A worker that lives in another environment, for example the administrator environment, works too: run `npm run pingone:setup -- --worker-env-id <its environment ID>`.
+
+Run `curl ... | sh -s -- --pingone`. The script asks for the three values in the terminal (the secret is not echoed, not stored, and never leaves your machine except to your PingOne tenant), then creates in your environment:
+
+- a custom **resource** (`https://company.example/poppy`) with the scope `accounts:read`,
+- an OIDC **web application** (authorization code, PKCE S256, PAR required, `PRIVATE_KEY_JWT`, the agent's public key, redirect `http://127.0.0.1:<port>/cb`),
+- the **grant** of that scope to the application,
+- optionally one **demo user** (`--demo-user`) with a generated password printed once.
+
+It writes the settings to `.env` (mode 600), starts the Company on `http://127.0.0.1:5452` and the lab on the first free port, and opens the browser. Press **Start flow** and sign in as a user of that environment (PingOne shows its own sign-in page). Remove everything it created with `npm run pingone:teardown` (it asks for the worker credentials again and deletes only what it created).
+
+What was tested: the setup script against a real PingOne environment, where it created the objects and PingOne accepted the agent's PAR push (ES256 key, `typ: JWT`, audience = the endpoint). The whole flow is also tested end to end against an in-process fake authorization server. Not yet confirmed against PingOne: the consent page for a custom scope, the token exchange and the access token's claims, and the Company's final answer.
 
 ### If something goes wrong
 

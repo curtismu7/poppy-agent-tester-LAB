@@ -18,6 +18,7 @@ export default function IntroPage() {
         {CARDS.map((c) => <div key={c.title} className="rp-card"><h3>{c.title}</h3><p>{c.text}</p></div>)}
       </div>
       <p className="rp-strip"><b>What you'll see:</b> three moves &mdash; <b>read the Company</b>, <b>sign in as the agent</b>, <b>call the API</b>. The next page lists every request in order; the last page shows the token and the session it produced. Every request and response is real.</p>
+      <p className="muted" data-testid="intro-clients"><b>Who is the client?</b> With PingFederate the agent is its own client: the client_id is the URL of its client.json (CIMD). PingOne has no CIMD, so there the agent signs in with a registered client_id, set with PAT_P1_CLIENT_ID and PAT_DEMO_P1_ISSUER. Everything else is the same: PKCE, a signed assertion instead of a secret, and the Poppy-Session.</p>
     </section>
   );
 }

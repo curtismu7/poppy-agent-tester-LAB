@@ -60,6 +60,21 @@ test('the docker run publishes only on 127.0.0.1', () => {
   assert.match(publishes[0], /127\.0\.0\.1:/);
 });
 
+
+test('--pingone: node only, runs setup then the Company and the lab, never publishes the Company port to the lab', () => {
+  const dir = tmpDir();
+  const r = sh('--pingone', '--dry-run', '--no-open', '--region', 'eu', '--demo-user', '--dir', dir);
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /node scripts\/pingone\/setup\.mjs --region eu --base-url http:\/\/127\.0\.0\.1:54\d\d --demo-user/);
+  assert.match(r.stdout, /company\/src\/index\.js/);
+  assert.match(r.stdout, /MODE=live node --env-file=.*server\/src\/index\.js/);
+  assert.doesNotMatch(r.stdout, /docker run/);
+  assert.equal(fs.existsSync(dir), false);
+  assert.notEqual(sh('--pingone', '--runtime', 'docker', '--dry-run').status, 0);
+  assert.notEqual(sh('--pingone', '--region', 'mars', '--dry-run').status, 0);
+  assert.notEqual(sh('--pingone', '--port', '5452', '--dry-run').status, 0);
+});
+
 test('rejects a port outside 5450-5499, a bad runtime and an unknown option', () => {
   assert.notEqual(sh('--dry-run', '--port', '6000').status, 0);
   assert.notEqual(sh('--dry-run', '--port', 'abc').status, 0);
@@ -70,7 +85,7 @@ test('rejects a port outside 5450-5499, a bad runtime and an unknown option', ()
 test('README carries the instructions section and the PDF is built from it', () => {
   const readme = fs.readFileSync(path.join(root, 'README.md'), 'utf8');
   assert.match(readme, /<!-- instructions:start -->[\s\S]*curl -fsSL[\s\S]*<!-- instructions:end -->/);
-  assert.match(readme, /PingOne cannot be the authorization server/);
+  assert.match(readme, /A live run against PingOne/);
   const pdf = fs.readFileSync(path.join(root, 'docs/Poppy-Agent-Tester-Setup.pdf'));
   assert.equal(pdf.subarray(0, 4).toString(), '%PDF');
   assert.ok(pdf.length > 20000);

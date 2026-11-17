@@ -34,9 +34,13 @@ function Row({ row, open }) {
 
 const GAPS = [
   ["PingFederate", "CIMD client registration is manual: an operator uploads the agent's client.json as a client."],
-  ["PingOne", "no CIMD support yet, so the agent needs a registered client_id. PAR works, but the agent document is not fetched."],
+  ["PingOne", "no CIMD, so the agent signs in with a registered client (a registered client_id, private_key_jwt, PAR and PKCE) and client.json is not fetched. Registered mode needs PAT_P1_CLIENT_ID and PAT_DEMO_P1_ISSUER; without both, PingOne is not configured here and nothing for it is simulated."],
   ["Every Company", "no agent is trusted by default (spec 4.1): the operator allow-lists the agents it accepts."],
 ];
+
+// Same rule as the server (registered.js sameIssuer): trailing slashes are not a different issuer.
+const sameIssuer = (a, b) => Boolean(a) && Boolean(b) && String(a).trim().replace(/\/+$/, "") === String(b).trim().replace(/\/+$/, "");
+const p1Status = (d, registered) => (!d.p1Issuer ? "not configured here" : registered?.available === false ? (registered.problem ? "issuer set, registered settings invalid" : "issuer set, PAT_P1_CLIENT_ID missing") : "preconfigured");
 
 export default function CallsPage({ ui, c }) {
   const { info, state, busy, off, scopes, scope, setScope, origin, setOrigin, issuer, setIssuer, path, setPath, useResource, setUseResource, mismatch, as, pickAs } = c;
@@ -51,8 +55,17 @@ export default function CallsPage({ ui, c }) {
         <fieldset className="rp-as" aria-label="Authorization server">
           <legend>Authorization server</legend>
           <label className="inline"><input type="radio" name="as" checked={as === "pf"} disabled={!d.issuer} onChange={() => pickAs("pf")} />PingFederate <span className="rp-pre">{d.issuer ? "preconfigured" : "not configured here"}</span></label>
-          <label className="inline"><input type="radio" name="as" checked={as === "p1"} disabled={!d.p1Issuer} onChange={() => pickAs("p1")} />PingOne <span className="rp-pre">{d.p1Issuer ? "preconfigured" : "not configured here"}</span></label>
+          <label className="inline"><input type="radio" name="as" checked={as === "p1"} disabled={!d.p1Issuer} onChange={() => pickAs("p1")} />PingOne <span className="rp-pre" data-testid="p1-status">{p1Status(d, info?.registered)}</span></label>
         </fieldset>
+      )}
+      {sameIssuer(issuer, d.p1Issuer) && (
+        <p className="muted rp-hint" data-testid="p1-note">
+          {info?.registered?.available
+            ? <>PingOne signs in with the registered client_id <code>{info.registered.clientId}</code> (no CIMD, no client.json). The PingFederate sign-in is unchanged.</>
+            : info?.registered?.problem
+              ? <>PingOne signs in with a registered client_id (no CIMD), but the registered settings are invalid: {info.registered.problem}. Reading the Company will stop with registered_config_invalid.</>
+              : <>PingOne signs in with a registered client_id (no CIMD), but PAT_P1_CLIENT_ID is not set here, so reading the Company will stop with registered_client_missing.</>}
+        </p>
       )}
       <div className="rp-gaps">
         <b>What's missing here (honest gaps)</b>

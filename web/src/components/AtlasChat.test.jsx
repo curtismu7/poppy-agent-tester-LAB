@@ -117,7 +117,7 @@ describe("AtlasChat", () => {
       return json({ error: "nope" }, 404);
     });
     render(<AtlasChat info={INFO} resetSignal={0} />);
-    await screen.findByText(/Type the Company origin and the PingFederate issuer above/);
+    await screen.findByText(/Type the Company origin and the authorization server issuer above/);
     expect(screen.queryByTestId("atlas-chip-0")).toBeNull();
     fireEvent.change(screen.getByTestId("atlas-origin"), { target: { value: " https://company.example " } });
     expect(screen.queryByTestId("atlas-chip-0")).toBeNull(); // one box is not enough

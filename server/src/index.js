@@ -9,6 +9,7 @@ import { assertBindAllowed, bindHost, labProxyHosts, resolvePort } from './safet
 import { hostedFrom, baseUrlFrom } from './config.js';
 import { loadAgentKey } from './agentKey.js';
 import { chatConfigFrom, createChatClient } from './chatAgent.js';
+import { registeredFrom } from './registered.js';
 
 installNetguard(); // before anything else can open a socket
 
@@ -30,7 +31,7 @@ const proxyHosts = labProxyHosts(process.env, port);
 const chatCfg = chatConfigFrom(process.env);
 const chat = !hosted && chatCfg.apiKey ? { client: createChatClient(chatCfg), model: chatCfg.model } : null;
 console.log(`[poppy-agent-tester] chat agent: ${chat ? `live (${chat.model})` : 'guided script (set ANTHROPIC_API_KEY for a live agent)'}`);
-const app = createApp({ agent: hosted ? null : loadAgentKey(dataDir), hosted, baseUrl: baseUrlFrom(), proxyHosts, chat });
+const app = createApp({ agent: hosted ? null : loadAgentKey(dataDir), hosted, baseUrl: baseUrlFrom(), proxyHosts, chat, registered: registeredFrom() });
 if (process.env.PAT_TLS_CERT && process.env.PAT_TLS_KEY) {
   // PingFederate fetches the agent's client metadata over https, so the agent URL needs a certificate PF trusts.
   const server = https.createServer({ cert: fs.readFileSync(process.env.PAT_TLS_CERT), key: fs.readFileSync(process.env.PAT_TLS_KEY) }, app);

@@ -20,3 +20,7 @@ The Company's authorization server is the shared PingFederate, and it advertises
 ## The protected_resources field
 
 PingFederate's metadata does not list `protected_resources` (spec 3.2). The Company's metadata shim adds it on the issuer's port, and the issuer string does not change.
+
+## PingOne instead of PingFederate
+
+PingOne cannot fetch a Client ID Metadata Document, so the agent uses a registered client there. See the README section "A live run against PingOne" and `npm run pingone:setup`.

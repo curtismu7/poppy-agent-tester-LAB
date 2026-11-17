@@ -25,6 +25,7 @@ import { buildStory } from './story.js';
 import { buildSample } from './sample.js';
 import { shelfInfo } from './shelfLink.js';
 import { chatTurn, MAX_TEXT } from './chatAgent.js';
+import { registeredFrom, registeredProblem, clientFor, sameIssuer } from './registered.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const WEB_DIST = process.env.WEB_DIST || path.resolve(HERE, '../../web/dist');
@@ -37,7 +38,7 @@ const SCOPE_RE = /^[\x21\x23-\x5b\x5d-\x7e]+( [\x21\x23-\x5b\x5d-\x7e]+)*$/;
 
 const safePath = (p) => typeof p === 'string' && /^\/[A-Za-z0-9._~!$&'()*+,;=:@%/-]*$/.test(p) && !p.includes('//') && !p.split('/').includes('..');
 
-export function createApp({ configFile = CONFIG, agent, health = createHealth({ runtime: hostedFrom() ? 'offline' : 'live' }), hosted = hostedFrom(), baseUrl = baseUrlFrom(), sessions = createSessions(), fetchImpl = (...a) => globalThis.fetch(...a), proxyHosts = new Set(), chat = null } = {}) {
+export function createApp({ configFile = CONFIG, agent, health = createHealth({ runtime: hostedFrom() ? 'offline' : 'live' }), hosted = hostedFrom(), baseUrl = baseUrlFrom(), sessions = createSessions(), fetchImpl = (...a) => globalThis.fetch(...a), proxyHosts = new Set(), chat = null, registered = registeredFrom() } = {}) {
   // Rule 19: the mode is a mutable holder so POST /api/mode can switch at runtime. Every gate below reads
   // holder.hosted. A hosted build cannot switch to real: realAvailable is false there (no agent config), so it fails closed.
   const holder = { hosted };
@@ -48,6 +49,9 @@ export function createApp({ configFile = CONFIG, agent, health = createHealth({ 
   app.use((_req, res, next) => { res.set('X-Content-Type-Options', 'nosniff'); next(); });
 
   const redirectUri = () => `${baseUrl}/cb`;
+  // Registered-client mode (PingOne): the assertion names its own aud and typ. CIMD sign-ins pass nothing, so PingFederate output is unchanged.
+  const assertionFor = (config, endpoint) => (config.client.kind === 'registered'
+    ? { assertionAud: registered.assertionAud === 'endpoint' ? endpoint : config.issuerClaim, assertionTyp: registered.assertionTyp } : {});
   // The visitor's typed hosts are reachable only for a short window, renewed right before each call (see netguard.js).
   const reach = (...urls) => { for (const u of urls) permitHost(new URL(u).hostname); };
   const pendingByState = new Map(); // state -> workspace id, for the redirect that carries no header
@@ -79,7 +83,7 @@ export function createApp({ configFile = CONFIG, agent, health = createHealth({ 
     }
     if (req.query.error) { sessions.log(ws, { kind: 'authorize', error: String(req.query.error).slice(0, 80), detail: String(req.query.error_description || '').slice(0, 200) }); return res.redirect(home('signin=error')); }
     try {
-      const req2 = tokenRequest({ tokenEndpoint: rec.config.tokenEndpoint, clientId: `${baseUrl}/client.json`, issuer: rec.config.issuerClaim, kid: agent.kid, signingKey: agent.privateKey, code: String(req.query.code || ''), redirectUri: redirectUri(), verifier, resource: useResource ? rec.config.resource : undefined });
+      const req2 = tokenRequest({ tokenEndpoint: rec.config.tokenEndpoint, clientId: rec.config.client.id, issuer: rec.config.issuerClaim, ...assertionFor(rec.config, rec.config.tokenEndpoint), kid: agent.kid, signingKey: agent.privateKey, code: String(req.query.code || ''), redirectUri: redirectUri(), verifier, resource: useResource ? rec.config.resource : undefined });
       reach(req2.url);
       const r = await fetchImpl(req2.url, { method: 'POST', headers: req2.headers, body: req2.body, redirect: 'manual', signal: AbortSignal.timeout(10000) });
       const text = await readClipped(r, MAX_BODY);
@@ -114,6 +118,7 @@ export function createApp({ configFile = CONFIG, agent, health = createHealth({ 
   });
   api.get('/info', (_req, res) => { res.set('Cache-Control', 'no-store'); res.json({ hosted: holder.hosted, simulated: holder.hosted, agentClientId: baseUrl ? `${baseUrl}/client.json` : null, configured: !ready(),
       source: holder.hosted ? 'mock' : 'real', realAvailable: realAvailable(),
+      registered: { available: Boolean(registered), issuer: registered?.issuer ?? null, clientId: registered?.clientId ?? null, problem: registered ? null : registeredProblem() },
       realReason: realAvailable() ? null : 'Real mode is not available: give the server the Company and PingFederate settings (agent key and base URL).',
       defaults: demoDefaultsFrom(),
       // The chat tab's live agent: on when the server has a model key (never returned) and the build is not hosted.
@@ -153,6 +158,12 @@ export function createApp({ configFile = CONFIG, agent, health = createHealth({ 
     sessions.log(ws, { kind: 'discover', request: { urls: [d.poppyUrl, d.resourceUrl] }, response: { checks: d.checks } });
     const brief = { ok: false, checks: d.checks, poppy: d.poppy, resource: d.resource };
     if (!d.issuer || new URL(d.issuer).origin !== issuer) return res.status(400).json({ error: 'issuer_mismatch', message: `The Company publishes issuer ${d.issuer ?? '(none)'}, not the one you typed (${issuer}).`, published: d.issuer ?? null, discovery: brief });
+    // The PingOne issuer needs the registered client_id; say so before anything is sent to it.
+    if (!registered && sameIssuer(d.issuer, demoDefaultsFrom().p1Issuer)) {
+      const problem = registeredProblem();
+      if (problem) return res.status(409).json({ error: 'registered_config_invalid', message: `This issuer is the configured PingOne issuer, but its registered-client settings are invalid: ${problem}.`, discovery: brief });
+      return res.status(409).json({ error: 'registered_client_missing', message: 'This issuer is the configured PingOne issuer, and PingOne has no CIMD, so the agent needs a registered client_id. Set PAT_P1_CLIENT_ID (the PingOne application id) and restart.', discovery: brief });
+    }
     reach(issuer);
     let im;
     try { im = await fetchIssuerMetadata(d.issuer, { fetchImpl }); } catch (e) {
@@ -177,7 +188,7 @@ export function createApp({ configFile = CONFIG, agent, health = createHealth({ 
     const ok = checks.every((c) => c.level === 'warn' || c.ok);
     const rec = sessions.get(ws);
     rec.config = {
-      origin, issuer, issuerClaim: d.issuer, resource: d.resource.resource, issParamRequired: meta.authorization_response_iss_parameter_supported === true,
+      origin, issuer, issuerClaim: d.issuer, client: clientFor({ registered, baseUrl, issuerClaim: d.issuer }), resource: d.resource.resource, issParamRequired: meta.authorization_response_iss_parameter_supported === true,
       authorizationEndpoint: meta.authorization_endpoint, tokenEndpoint: meta.token_endpoint, parEndpoint, scope: defaultScope(Object.keys(d.poppy.auth?.scopes ?? {})),
     };
     rec.discovery = { ok, checks, poppy: d.poppy, resource: d.resource };
@@ -215,7 +226,7 @@ export function createApp({ configFile = CONFIG, agent, health = createHealth({ 
     rec.config.scope = scope;
     pendingByState.set(state, ws);
     if (pendingByState.size > 1000) pendingByState.delete(pendingByState.keys().next().value);
-    const clientId = `${baseUrl}/client.json`;
+    const clientId = rec.config.client.id;
     const resource = useResource ? rec.config.resource : undefined;
     const loginHint = loginHintFrom() || undefined;
     let url;
@@ -223,7 +234,7 @@ export function createApp({ configFile = CONFIG, agent, health = createHealth({ 
     if (rec.config.parEndpoint) {
       // RFC 9126 (spec 4.2: SHOULD whenever the issuer lists the endpoint): push the parameters with the client assertion, then
       // open the authorization endpoint with only client_id and the request_uri. A refusal is shown, never quietly downgraded.
-      const par = parRequest({ parEndpoint: rec.config.parEndpoint, clientId, issuer: rec.config.issuerClaim, kid: agent.kid, signingKey: agent.privateKey, redirectUri: redirectUri(), scope, state, challenge: pkce.challenge, resource, loginHint });
+      const par = parRequest({ parEndpoint: rec.config.parEndpoint, clientId, issuer: rec.config.issuerClaim, ...assertionFor(rec.config, rec.config.parEndpoint), kid: agent.kid, signingKey: agent.privateKey, redirectUri: redirectUri(), scope, state, challenge: pkce.challenge, resource, loginHint });
       reach(par.url);
       const r = await fetchImpl(par.url, { method: 'POST', headers: par.headers, body: par.body, redirect: 'manual', signal: AbortSignal.timeout(10000) });
       const text = await readClipped(r, MAX_BODY);
@@ -239,7 +250,7 @@ export function createApp({ configFile = CONFIG, agent, health = createHealth({ 
       url = authorizationUrl({ authorizationEndpoint: rec.config.authorizationEndpoint, clientId, redirectUri: redirectUri(), scope, state, challenge: pkce.challenge, resource, loginHint });
     }
     sessions.log(ws, { kind: 'authorize', request: { url } });
-    return res.json({ url, clientId, par: pushed });
+    return res.json({ url, clientId, clientKind: rec.config.client.kind, par: pushed });
   };
   api.post('/authorize', live(authorizeStep));
 
@@ -253,7 +264,7 @@ export function createApp({ configFile = CONFIG, agent, health = createHealth({ 
     // issuer's name for the person (here the login name) and a User ID must not contain or derive from personal information.
     const sub = sessions.userId(ws, rec.config.issuerClaim);
     const url = `${rec.config.origin}${p}`;
-    const clientId = `${baseUrl}/client.json`;
+    const clientId = rec.config.client.id;
     const delegation = signDelegation({ clientId, kid: agent.kid, signingKey: agent.privateKey, delegatedPublicJwk: rec.delegated.publicJwk });
     const session = signSession({ delegation, delegatedKey: rec.delegated, clientId, issuer: rec.config.issuerClaim, sid: rec.sid, sub, method: 'GET', url, accessToken: rec.token.access_token });
     const trace = newTrace(req.headers.traceparent);

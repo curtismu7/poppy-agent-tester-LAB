@@ -1,0 +1,1 @@
+{"name":"poppy-reference-company","private":true,"type":"module","scripts":{"start":"node src/index.js","test":"node --test test/*.test.js"}}

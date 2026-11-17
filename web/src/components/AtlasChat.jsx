@@ -30,11 +30,11 @@ const SCRIPT = {
   },
   authorize: {
     person: "Where's my order?",
-    agentLine: () => "To see your orders I need you signed in. PingFederate opens its own page; you sign in there and allow the read.",
-    need: "That needs your sign-in. Opening PingFederate's page.",
+    agentLine: () => "To see your orders I need you signed in. The authorization server opens its own page; you sign in there and allow the read.",
+    need: "That needs your sign-in. Opening the authorization server's page.",
   },
   token: {
-    person: "(signed in at PingFederate)",
+    person: "(signed in at the authorization server)",
     agentLine: (state) => `Signed in. The token's client_id is my own metadata URL${state?.token?.claims?.sub ? `, and it names you as ${state.token.claims.sub}` : ""}.`,
   },
   call: {
@@ -70,7 +70,7 @@ function StepRow({ step, onOpen, open }) {
   const kind = step.kind;
   const title = {
     discover: "Read the Company origin's documents",
-    authorize: "Sign in at PingFederate (client_id is a URL, PKCE)",
+    authorize: "Sign in at the authorization server (PKCE; client_id is the agent URL, or a registered id for PingOne)",
     token: "Exchange the code (private_key_jwt)",
     call: "Call the Company origin's API with Bearer + Poppy-Session",
   }[kind] ?? kind;
@@ -126,7 +126,7 @@ export default function AtlasChat({ info, resetSignal }) {
     return s;
   }, () => { setState(null); return null; }), [info]);
   useEffect(() => { refresh(); }, [refresh, resetSignal]);
-  // Live mode: the conversation lives on the server (per workspace), so it survives the round trip to PingFederate.
+  // Live mode: the conversation lives on the server (per workspace), so it survives the round trip to the authorization server.
   useEffect(() => { if (live) getJson("/api/chat").then((r) => setChat(r.messages ?? []), () => {}); else setChat([]); }, [live, resetSignal]);
 
   const say = (who, text) => setChat((c) => [...c, { who, text }]);
@@ -187,7 +187,7 @@ export default function AtlasChat({ info, resetSignal }) {
     setPhase("done");
   };
 
-  // After the redirect back from PingFederate the workspace already holds the token.
+  // After the redirect back from the authorization server the workspace already holds the token.
   useEffect(() => {
     if (state?.signedIn && phase === "signin") {
       setActiveArrow(STEP_ARROW.token);
@@ -239,14 +239,14 @@ export default function AtlasChat({ info, resetSignal }) {
             <legend>Which Company?</legend>
             <label htmlFor="atlas-origin">Company origin</label>
             <input id="atlas-origin" data-testid="atlas-origin" value={origin} onChange={(e) => setOrigin(e.target.value)} placeholder="https://company.example" maxLength={300} autoComplete="off" spellCheck={false} />
-            <label htmlFor="atlas-issuer">PingFederate issuer</label>
+            <label htmlFor="atlas-issuer">Authorization server issuer</label>
             <input id="atlas-issuer" data-testid="atlas-issuer" value={issuer} onChange={(e) => setIssuer(e.target.value)} placeholder="https://pf.example:9031" maxLength={300} autoComplete="off" spellCheck={false} />
           </fieldset>
         )}
         <div className="atlas-chips" role="group" aria-label="Things to try">
           {chips.length
             ? chips.map((c, i) => <button key={i} type="button" data-testid={`atlas-chip-${i}`} onClick={c.onClick} disabled={c.disabled}>{c.label}</button>)
-            : <p className="muted" data-testid="atlas-hint">{info?.hosted ? "This hosted build cannot reach a Company. Run the standalone to chat with the agent." : "Type the Company origin and the PingFederate issuer above; a question to ask appears here."}</p>}
+            : <p className="muted" data-testid="atlas-hint">{info?.hosted ? "This hosted build cannot reach a Company. Run the standalone to chat with the agent." : "Type the Company origin and the authorization server issuer above; a question to ask appears here."}</p>}
         </div>
       </section>
 

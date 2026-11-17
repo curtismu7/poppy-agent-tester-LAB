@@ -3,8 +3,8 @@ import Json, { POPPY_HOT } from "../Json";
 import { latestSession } from "./callRows";
 
 const STANDARDS = [
-  { name: "Client ID Metadata Document (CIMD)", text: "The client_id is a URL. The authorization server fetches the agent's metadata and public keys from it, so nothing is registered by hand on the agent's side. This is the core idea." },
-  { name: "private_key_jwt (RFC 7523)", text: "The agent signs a short assertion with its private key instead of sending a secret. The server checks it against the jwks_uri in client.json, at the token endpoint and at the PAR endpoint." },
+  { name: "Client ID Metadata Document (CIMD)", text: "The client_id is a URL. The authorization server fetches the agent's metadata and public keys from it, so nothing is registered by hand on the agent's side. This is the core idea. PingOne does not take a metadata document, so there the client_id is a registered application id and the public key is registered on that application instead." },
+  { name: "private_key_jwt (RFC 7523)", text: "The agent signs a short assertion with its private key instead of sending a secret. The server checks it against the jwks_uri in client.json (PingFederate) or the key registered on the application (PingOne), at the token endpoint and at the PAR endpoint." },
   { name: "Pushed Authorization Requests (RFC 9126)", text: "The sign-in request goes server to server first; the browser carries only a request_uri. Required by FAPI 2.0 companies. Add DPoP (RFC 9449) and the code is also bound to the agent's key." },
   { name: "Resource indicator (RFC 8707)", text: "The resource parameter names the Company the token is for, so it cannot be replayed at another API. Off by default here because PingFederate refuses a resource it has not registered." },
 ];

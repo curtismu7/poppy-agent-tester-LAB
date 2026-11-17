@@ -12,7 +12,7 @@ The agent reads two public documents from Fabrikam Bank: poppy.json says which s
 
 ## Sign in
 
-There is no client id to register. The client_id is the URL of the agent's metadata document, and PingFederate fetches it. The agent proves itself with a signed assertion, not a secret. The person signs in and allows accounts:read.
+With PingFederate there is no client id to register: the client_id is the URL of the agent's metadata document, and PingFederate fetches it. PingOne does not take a metadata document as a client_id, so there the agent signs in with a client_id registered once on the PingOne side. Either way the agent proves itself with a signed assertion, not a secret. The person signs in and allows accounts:read.
 
 ## Call
 
@@ -40,7 +40,7 @@ Their agent gets more done, at every Company that takes part, without being hand
 
 ## Where Ping lands
 
-Every step of this flow runs through identity infrastructure: PingFederate resolves the agent URL (CIMD), signs the person in, issues the token with the agent URL as client_id, and publishes the metadata the Company verifies against. The Poppy-Session is verified with the same JWKS machinery. In other words, Poppy is a new kind of traffic arriving at the front door you already own — and the demos in this family show Ping making that door work for agents without a separate stack.
+Every step of this flow runs through identity infrastructure: the authorization server signs the person in and issues the token. PingFederate resolves the agent URL (CIMD) and uses it as the client_id; PingOne uses a registered client_id instead. Either one publishes the issuer metadata the Company verifies against. The Poppy-Session is verified with the same JWKS machinery. In other words, Poppy is a new kind of traffic arriving at the front door you already own — and the demos in this family show Ping making that door work for agents without a separate stack.
 
 ## What we have not shown
 

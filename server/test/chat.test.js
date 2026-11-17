@@ -8,7 +8,7 @@ import { createApp } from '../src/app.js';
 import { createSessions } from '../src/sessions.js';
 import { generateEs256Key, jwkThumbprint } from '../src/jose.js';
 import { createHealth } from '../src/health.js';
-import { chatTurn, chatConfigFrom, DEFAULT_MODEL, MAX_TURNS, TOOLS } from '../src/chatAgent.js';
+import { chatTurn, chatConfigFrom, DEFAULT_MODEL, MAX_TURNS, TOOLS, SYSTEM } from '../src/chatAgent.js';
 
 const opened = [];
 const listen = (app) => new Promise((res) => { const s = http.createServer(app).listen(0, '127.0.0.1', () => { opened.push(s); res(s); }); });
@@ -160,4 +160,17 @@ test('chatTurn stops after MAX_TURNS tool rounds and on a refusal', async () => 
 test('chat config: the key comes only from the environment, the model defaults to the current Opus', () => {
   assert.deepEqual(chatConfigFrom({}), { apiKey: null, model: DEFAULT_MODEL });
   assert.deepEqual(chatConfigFrom({ ANTHROPIC_API_KEY: ' k ', PAT_CHAT_MODEL: 'claude-sonnet-5-5' }), { apiKey: 'k', model: 'claude-sonnet-5-5' });
+});
+
+test('finding: the model is never told the sign-in goes to PingFederate (the issuer may be PingOne)', async () => {
+  const text = [...SYSTEM, ...TOOLS.map((t) => t.description)].join('\n');
+  // PingFederate may be named only as the CIMD case of the client_id sentence, never as where the browser goes.
+  assert.doesNotMatch(text, /(?:to|at|opening) PingFederate/i);
+  assert.doesNotMatch(TOOLS.find((t) => t.name === 'start_sign_in').description, /PingFederate/);
+  const client = scripted([toolUse('read_company'), toolUse('start_sign_in'), say('Off you go.')]);
+  const a = await startApp({ chat: { client, model: 'm' } });
+  await a.post('/api/chat', { text: 'Where is my order?' });
+  const result = client.sent.at(-1).messages.at(-1).content[0];
+  assert.doesNotMatch(result.content, /PingFederate/);
+  assert.match(result.content, /authorization server/);
 });

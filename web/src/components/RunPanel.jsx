@@ -6,7 +6,7 @@ import IntroPage from "./run/IntroPage";
 import CallsPage from "./run/CallsPage";
 import TokenPage from "./run/TokenPage";
 
-const ERR = { issuer_mismatch: "The issuer you typed is not the one the Company publishes.", hosted_simulation: "This hosted build explains and shows an example run; run the standalone to reach a real Company.", agent_not_configured: "Set PAT_AGENT_BASE_URL to the https URL PingFederate can reach, then restart.", discover_first: "Read the Company first.", sign_in_first: "Sign in first." };
+const ERR = { issuer_mismatch: "The issuer you typed is not the one the Company publishes.", hosted_simulation: "This hosted build explains and shows an example run; run the standalone to reach a real Company.", agent_not_configured: "Set PAT_AGENT_BASE_URL (an https URL the authorization server can reach; for a PingOne registered client http://127.0.0.1:5450 also works), then restart.", discover_first: "Read the Company first.", sign_in_first: "Sign in first." };
 // A server message that names the real values (the issuer the Company publishes, the host that failed) beats a generic one.
 const say = (r) => (["issuer_mismatch", "upstream", "no_sub", "par_failed"].includes(r.body.error) ? r.body.message : ERR[r.body.error]) || r.body.message || r.body.error || `HTTP ${r.status}`;
 
@@ -101,7 +101,7 @@ export default function RunPanel({ info, resetSignal }) {
           <Json value={sample.steps} label="Example run steps" hot={POPPY_HOT} />
         </section>
       )}
-      {info && !info.configured && !hosted && <p className="panel panel--warn" data-testid="not-configured">Sign-in and calls need PAT_AGENT_BASE_URL (the https URL PingFederate can reach for this agent). Reading the Company works without it.</p>}
+      {info && !info.configured && !hosted && <p className="panel panel--warn" data-testid="not-configured">Sign-in and calls need PAT_AGENT_BASE_URL (an https URL the authorization server can reach for this agent, or http://127.0.0.1:5450 for a PingOne registered client). Reading the Company works without it.</p>}
       <p className="sr-only" role="status" aria-live="polite">{msg}</p>
       {msg && <p className="panel" data-testid="msg">{msg}</p>}
     </>

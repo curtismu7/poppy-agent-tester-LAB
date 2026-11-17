@@ -11,7 +11,7 @@ export default function IntroPage() {
       <p className="rp-eyebrow">Personal Agent Protocol &middot; spec 1.0</p>
       <h2 id="rp-intro" className="rp-title">Your agent. Your login. The Company's API.</h2>
       <p className="rp-lede">
-        The Personal Agent Protocol is how a person's AI agent walks up to a Company it has never met and gets real work done without anyone pasting API keys.
+        The Personal Agent Protocol is how a person's AI agent starts from a Company origin it has never seen and gets real work done without anyone pasting API keys.
         The agent <b>names itself with a URL</b>, the person <b>signs in once</b> at the Company's authorization server, and every request after that is <b>signed, scoped and auditable</b>.
       </p>
       <div className="rp-cards">

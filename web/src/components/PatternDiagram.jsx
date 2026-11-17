@@ -66,7 +66,7 @@ function sides(a, b) {
   return Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? ["r", "l"] : ["l", "r"]) : (dy > 0 ? ["b", "t"] : ["t", "b"]);
 }
 
-function Canvas({ pattern, graph, positions, onMove, stepper, activeEdge = null, open, setOpen }) {
+function Canvas({ pattern, graph, positions, onMove, stepper, activeEdge = null, open, setOpen, pop }) {
   const ref = useRef(null);
   useFitOnResize(ref, FIT);
   const active = stepper && stepper.step >= 0 ? pattern.steps[stepper.step] : null;
@@ -85,14 +85,14 @@ function Canvas({ pattern, graph, positions, onMove, stepper, activeEdge = null,
     return {
       id: `e${i}`, source: s.from, target: s.to, sourceHandle: `s-${a}`, targetHandle: `t-${b}`, type: "arrow",
       animated: now, data: { dy: offs[i] },
-      className: `pat-edge${cp ? " pat-edge--cp" : ""}${now ? " pat-edge--now" : ""}${stepper && stepper.step >= 0 && !seen ? " pat-edge--dim" : ""}`,
+      className: `pat-edge${s.reply ? " pat-edge--reply" : ""}${s.phase ? ` pat-edge--${s.phase}` : ""}${cp ? " pat-edge--cp" : ""}${now ? " pat-edge--now" : ""}${stepper && stepper.step >= 0 && !seen ? " pat-edge--dim" : ""}`,
       markerEnd: { type: MarkerType.ArrowClosed },
     };
   }), pageDriven ? [activeEdge] : []);
   // One label per arrow, in a layer above the boxes, on the arrow's own (shifted) curve. The lit arrow is the walkthrough's, or the page's (activeEdge).
   const labels = pattern.steps.map((s, i) => {
     const sh = endShift(offs[i]); const hs = (h) => `${edges[i][h]}@${sh}`;
-    return { id: `e${i}`, text: `${i + 1}. ${s.label}`, source: s.from, target: s.to, sourceHandle: hs("sourceHandle"), targetHandle: hs("targetHandle"),
+    return { id: `e${i}`, text: `${i + 1}. ${s.short || s.label}`, source: s.from, target: s.to, sourceHandle: hs("sourceHandle"), targetHandle: hs("targetHandle"),
       active: stepper ? stepper.step === i : activeEdge === i, dim: !!stepper && stepper.step >= 0 && !(i <= stepper.step), prefer: offs[i] - sh };
   });
   // What an expanded box can do: open the box at the far end of an arrow, close itself, and make a link that opens this page with the box expanded.
@@ -100,15 +100,21 @@ function Canvas({ pattern, graph, positions, onMove, stepper, activeEdge = null,
     open: (id) => setOpen(id), close: () => setOpen(null),
     link: (id) => { const u = new URL(window.location.href); u.searchParams.set("box", id); return u.toString(); },
   }), [setOpen]);
+  // Clicking an arrow or its label jumps the walkthrough to that step and opens its explanation.
+  const pick = (i) => { if (!stepper || !(i >= 0)) return; stepper.goTo(i); pop.setOpen(true); };
+  const phaseCss = pattern.steps.map((s, i) => (s.phase ? `.pat-canvas [data-label-id="e${i}"]{--ph:var(--ph-${s.phase})}` : "")).join("");
   return (
     <div ref={ref} className="pat-canvas" data-testid="pattern-canvas">
+      {phaseCss && <style>{phaseCss}</style>}
+      {stepper && active && pop.open && <StepPopup steps={pattern.steps} nodes={pattern.nodes} i={stepper.step} onGo={(n) => stepper.goTo(n)} onClose={() => pop.setOpen(false)} />}
       <PassportActions.Provider value={actions}>
         <ReactFlow nodes={nodes} edges={edges} nodeTypes={nodeTypes} edgeTypes={edgeTypes} fitView fitViewOptions={FIT} nodesConnectable={false} minZoom={0.3}
+          onEdgeClick={(_, e) => pick(Number(String(e.id).slice(1)))}
           onNodeClick={(_, n) => setOpen((o) => (o === n.id ? null : n.id))} onPaneClick={() => setOpen(null)}
           onNodeDragStop={(_, n) => onMove(n.id, n.position)} onNodeDrag={(_, n) => onMove(n.id, n.position)} proOptions={{ hideAttribution: true }}>
           <Background variant={BackgroundVariant.Dots} gap={18} />
           <Controls showInteractive={false} />
-          <EdgeLabels items={labels} pointFor={pointFor} fallback={{ w: 150, h: 56 }} />
+          <EdgeLabels items={labels} pointFor={pointFor} fallback={{ w: 150, h: 56 }} onSelect={(e) => pick(Number(String(e.id).slice(1)))} />
           <FitOpen open={open} closePadding={FIT.padding} />
         </ReactFlow>
       </PassportActions.Provider>
@@ -144,7 +150,7 @@ function Narration({ steps, stepper }) {
       <ol className="pat-narr__list">
         {steps.map((s, n) => (
           <li key={n}>
-            <button type="button" className={`pat-narr__item${n === i ? " is-now" : n < i ? " is-done" : ""}`} aria-current={n === i ? "step" : undefined}
+            <button type="button" className={`pat-narr__item${s.phase ? ` pat-narr__item--${s.phase}` : ""}${n === i ? " is-now" : n < i ? " is-done" : ""}`} aria-current={n === i ? "step" : undefined}
               onClick={() => stepper.goTo(n)} data-testid={`narr-step-${n}`}>
               <span className="pat-narr__n">{n + 1}</span> {s.label}
             </button>
@@ -155,6 +161,48 @@ function Narration({ steps, stepper }) {
   );
 }
 
+// The step's explanation as a card on the canvas: a plain-language sentence, the key fields in the message and where the spec defines it (the long what/why stays in the narration beside the canvas). Not modal: the diagram stays usable,
+// Escape or the close button hides it, and it follows the walkthrough while it plays.
+function StepPopup({ steps, nodes, i, onGo, onClose }) {
+  const name = (id) => nodes.find((n) => n.id === id)?.label || id;
+  const step = steps[i];
+  useEffect(() => { const on = (e) => { if (e.key === "Escape") onClose(); }; window.addEventListener("keydown", on); return () => window.removeEventListener("keydown", on); }, [onClose]);
+  if (!step) return null;
+  return (
+    <aside className={`pat-pop${step.phase ? ` pat-pop--${step.phase}` : ""}`} role="dialog" aria-label={`Step ${i + 1} explanation`} data-testid="pattern-popup">
+      <header className="pat-pop__head">
+        <span className="pat-pop__n">Step {i + 1} of {steps.length}</span>
+        {step.phase && <span className="pat-pop__phase">{PHASE_NAMES[step.phase] || step.phase}</span>}
+        <button type="button" className="pat-pop__x" onClick={onClose} aria-label="Close the explanation" data-testid="pattern-popup-close">×</button>
+      </header>
+      <h3 className="pat-pop__title">{step.label}</h3>
+      <p className="pat-pop__kind">{step.reply ? "Reply" : "Request"}: {name(step.from)} to {name(step.to)}</p>
+      <p className="pat-pop__plain">{step.plain || step.say}</p>
+      {step.fields && step.fields.length > 0 && (<><h4>In the message</h4><ul className="pat-pop__fields">{step.fields.map((f) => <li key={f}>{f}</li>)}</ul></>)}
+      {step.spec && (<><h4>Where it is defined</h4><p className="pat-pop__spec">{step.spec}</p></>)}
+      <footer className="pat-pop__nav">
+        <button type="button" onClick={() => onGo(i - 1)} disabled={i === 0} data-testid="pattern-popup-prev">Previous</button>
+        <button type="button" onClick={() => onGo(i + 1)} disabled={i >= steps.length - 1} data-testid="pattern-popup-next">Next</button>
+      </footer>
+    </aside>
+  );
+}
+
+const PHASE_NAMES = { discover: "Discover the Company", signin: "Person signs in", token: "Get the token", call: "Call the API" };
+// The colour key: one chip per phase that the steps use, in the order they first appear, with the step numbers it covers.
+function Legend({ steps }) {
+  const phases = [];
+  steps.forEach((s, i) => { if (!s.phase) return; let p = phases.find((x) => x.id === s.phase); if (!p) { p = { id: s.phase, from: i + 1, to: i + 1 }; phases.push(p); } p.to = i + 1; });
+  if (!phases.length) return null;
+  return (
+    <ul className="pat-legend" aria-label="Arrow colours" data-testid="pattern-legend">
+      {phases.map((p) => (
+        <li key={p.id} className={`pat-legend__item pat-legend__item--${p.id}`}><span className="pat-legend__dot" aria-hidden="true" />{PHASE_NAMES[p.id] || p.id} <span className="pat-legend__steps">{p.from === p.to ? `step ${p.from}` : `steps ${p.from}-${p.to}`}</span></li>
+      ))}
+    </ul>
+  );
+}
+
 export default function PatternDiagram({ pattern, resetSignal = 0, activeEdge = null }) {
   const initial = useMemo(() => Object.fromEntries(pattern.nodes.map((n) => [n.id, { x: n.x, y: n.y }])), [pattern]);
   const [positions, setPositions] = useState(initial);
@@ -162,6 +210,10 @@ export default function PatternDiagram({ pattern, resetSignal = 0, activeEdge = 
   const graph = useMemo(() => ({ nodes: pattern.nodes.map((n) => ({ id: n.id, label: n.label, group: n.kind })), edges: pattern.steps.map((st, i) => ({ source: st.from, target: st.to, label: `${i + 1}. ${st.label}` })) }), [pattern]);
   const [open, setOpen] = useState(() => { const box = new URLSearchParams(window.location.search).get("box"); return box && pattern.nodes.some((n) => n.id === box) ? box : null; }); // a shared link's box
   const stepper = useDiagramStepper(pattern.steps.length);
+  // The pop-up explanation follows the walkthrough (unless switched off) and opens on a click on an arrow or its label.
+  const [popOpen, setPopOpen] = useState(true);
+  const [popAuto, setPopAuto] = useState(true);
+  useEffect(() => { if (popAuto && stepper.step >= 0) setPopOpen(true); }, [stepper.step, popAuto]);
   const onMove = useCallback((id, p) => setPositions((cur) => ({ ...cur, [id]: { x: p.x, y: p.y } })), []);
   // A page that passes activeEdge at all (the chat, -1 before its first step) lights the arrow its own steps reached.
   // Pressing Simulate takes the canvas back until Stop, so the walkthrough always plays; the narration is on every page.
@@ -184,11 +236,13 @@ export default function PatternDiagram({ pattern, resetSignal = 0, activeEdge = 
           <p>{pattern.steps[activeEdge].say}</p>
         </article>
       )}
+      <Legend steps={pattern.steps} />
+      <label className="pat-popauto"><input type="checkbox" checked={popAuto} onChange={(e) => { setPopAuto(e.target.checked); if (!e.target.checked) setPopOpen(false); }} data-testid="pattern-popup-auto" /> Pop-up explanations while it plays</label>
       <button type="button" className="pat-reset" onClick={reset} data-testid="pattern-reset">Reset positions and walkthrough</button>
       <div className={`pat-stage${pageDriven ? " pat-stage--stacked" : ""}`}>
         <ReactFlowProvider>
           {/* The canvas follows the page's arrow while no walkthrough is playing. */}
-          <Canvas pattern={pattern} graph={graph} positions={positions} onMove={onMove} stepper={pageHasArrow ? null : stepper} activeEdge={pageHasArrow ? activeEdge : null} open={open} setOpen={setOpen} />
+          <Canvas pattern={pattern} graph={graph} positions={positions} onMove={onMove} stepper={pageHasArrow ? null : stepper} activeEdge={pageHasArrow ? activeEdge : null} open={open} setOpen={setOpen} pop={{ open: popOpen, setOpen: setPopOpen }} />
         </ReactFlowProvider>
         <Narration steps={pattern.steps} stepper={stepper} />
       </div>

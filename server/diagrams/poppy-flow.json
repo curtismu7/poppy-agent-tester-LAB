@@ -9,7 +9,7 @@
       "color": "dark"
     },
     "idp": {
-      "label": "PingFederate",
+      "label": "Authorization server (PingFederate)",
       "color": "blue"
     },
     "company": {
@@ -23,21 +23,21 @@
       "label": "Personal Agent (this app)",
       "group": "actor",
       "x": 0,
-      "y": 150
+      "y": 170
     },
     {
       "id": "pf",
       "label": "PingFederate",
       "group": "idp",
-      "x": 420,
-      "y": -60
+      "x": 520,
+      "y": -30
     },
     {
       "id": "company",
       "label": "Company API",
       "group": "company",
-      "x": 420,
-      "y": 360
+      "x": 520,
+      "y": 370
     }
   ],
   "edges": [
@@ -104,6 +104,15 @@
       "why": "This is how an agent starts from a Company origin it has never seen. Nothing is configured on the agent side: the Company's own documents say what it offers and where to sign in.",
       "edges": [
         0
+      ],
+      "short": "Read poppy.json",
+      "phase": "discover",
+      "spec": "Spec section 3 (poppy.json) and RFC 9728 (protected resource metadata)",
+      "plain": "The agent starts with only a web address. It asks that address what the Company offers and which authorization server signs people in.",
+      "fields": [
+        "GET /.well-known/poppy.json",
+        "GET /.well-known/oauth-protected-resource",
+        "No identity yet, no secret, no redirects followed"
       ]
     },
     {
@@ -112,6 +121,16 @@
       "why": "scope_hints say whether a scope changes anything or touches personal data, so the agent can tell the person what they are about to allow. The exact-resource rule stops one Company's document from speaking for another resource on the same host.",
       "edges": [
         1
+      ],
+      "short": "Scopes, issuer, APIs",
+      "phase": "discover",
+      "spec": "Spec section 3 (poppy.json) and RFC 9728",
+      "plain": "The Company answers with its business card: the protocol version, the scopes it offers, the APIs they unlock and the address of its authorization server.",
+      "fields": [
+        "protocol_version 1.0",
+        "Scopes, each with a hint: does it change anything, does it touch personal data",
+        "The APIs, and the authorization server (issuer)",
+        "resource = the Company's own origin"
       ]
     },
     {
@@ -120,6 +139,16 @@
       "why": "The authorization server knows which agent is asking before the person sees any page, and it fetches the agent's client.json from that URL, so it never holds a stale copy of the agent's keys or redirect address (PingFederate still needs an operator-made CIMD policy for that exact URL). FAPI 2.0 Companies require PAR (RFC 9126).",
       "edges": [
         2
+      ],
+      "short": "PAR: signed push",
+      "phase": "signin",
+      "spec": "RFC 9126 (PAR), RFC 7523 (private_key_jwt) and spec section 4.2",
+      "plain": "The agent sends its whole sign-in request straight to the authorization server, signed with its own private key, instead of putting it in a browser link.",
+      "fields": [
+        "client_id: the agent's URL (on PingOne, the registered app ID)",
+        "scope, redirect_uri, PKCE challenge, state",
+        "client_assertion: a short-lived signed JWT (private_key_jwt)",
+        "No client secret"
       ]
     },
     {
@@ -128,6 +157,15 @@
       "why": "Nothing in the browser can change the request now: the address the person opens carries only client_id and this reference.",
       "edges": [
         3
+      ],
+      "short": "request_uri",
+      "phase": "signin",
+      "spec": "RFC 9126 (the pushed request answers with a request_uri)",
+      "plain": "The authorization server keeps the request and hands back a one-time reference to it. Nothing in the browser address can change the request now.",
+      "fields": [
+        "HTTP 201",
+        "request_uri: one-time and short-lived",
+        "expires_in"
       ]
     },
     {
@@ -136,6 +174,15 @@
       "why": "The only step the person sees. They never hand the agent a password, and the consent names the agent by its URL, so they can revoke it like any other app.",
       "edges": [
         4
+      ],
+      "short": "Person signs in",
+      "phase": "signin",
+      "spec": "Spec section 4.1 (the agent's client_id is a URL) and RFC 9126",
+      "plain": "The browser opens the authorization server with only the client ID and that reference. The person signs in and approves this agent for the scope.",
+      "fields": [
+        "client_id and request_uri, nothing else",
+        "Sign-in on the authorization server's own page",
+        "Consent: the person presses Allow"
       ]
     },
     {
@@ -144,6 +191,15 @@
       "why": "The iss check stops a mix-up attack, where a code from another authorization server is played back to the agent.",
       "edges": [
         5
+      ],
+      "short": "Code + iss",
+      "phase": "signin",
+      "spec": "RFC 9207 (the issuer comes back in the redirect) and spec section 4.2",
+      "plain": "The authorization server sends the person back to the agent with a one-time code, and says which issuer it was, so the agent can check it.",
+      "fields": [
+        "code: works once",
+        "state: matched against the agent's own",
+        "iss: the issuer, checked by the agent (RFC 9207)"
       ]
     },
     {
@@ -152,6 +208,16 @@
       "why": "PKCE proves the agent that started the sign-in is the one finishing it; the assertion proves it holds the key published at its jwks_uri. There is no client secret anywhere.",
       "edges": [
         6
+      ],
+      "short": "Token request",
+      "phase": "token",
+      "spec": "RFC 7636 (PKCE), RFC 7523 (client assertion) and spec section 4.2",
+      "plain": "The agent trades the code for an access token. It proves it is the same agent with the PKCE verifier and a fresh signed assertion.",
+      "fields": [
+        "grant_type authorization_code, code, redirect_uri",
+        "code_verifier (PKCE)",
+        "client_assertion (private_key_jwt)",
+        "No client secret"
       ]
     },
     {
@@ -160,6 +226,16 @@
       "why": "Every API the Company runs can now tell agent traffic from a person's, and exactly which agent it is.",
       "edges": [
         7
+      ],
+      "short": "Access token",
+      "phase": "token",
+      "spec": "Spec sections 4.1 and 5.1 (who the token is for, and the User ID the Company sees)",
+      "plain": "The authorization server issues an access token for this agent, this person and this scope. It is valid for a short time.",
+      "fields": [
+        "client_id: the agent",
+        "scope: accounts:read",
+        "expires_in: short",
+        "sub: the person who signed in"
       ]
     },
     {
@@ -168,6 +244,15 @@
       "why": "The token says what the person allowed; the session says which agent is asking right now, for this method, this URL and this token. A stolen token alone is not enough.",
       "edges": [
         8
+      ],
+      "short": "Signed API call",
+      "phase": "call",
+      "spec": "Spec sections 5.2 and 5.3 (Poppy-Session and the delegation) and RFC 7800 (cnf)",
+      "plain": "The agent calls the Company with the token and a Poppy-Session it signed for this one request, so a stolen token alone is not enough.",
+      "fields": [
+        "Authorization: Bearer <access token>",
+        "Poppy-Session: a JWT for this method, this URL and this token",
+        "Poppy-Version: 1.0"
       ]
     },
     {
@@ -176,6 +261,16 @@
       "why": "A replayed session, one signed for another token, or an unsupported version gets 400 (invalid_session or version_unsupported), and an agent the Company has not allow-listed is refused.",
       "edges": [
         9
+      ],
+      "short": "200 OK",
+      "phase": "call",
+      "spec": "Spec sections 5.1 and 5.3 (the User ID; session errors are HTTP 400, token errors 401)",
+      "plain": "The Company checks the token, the session signature and the agent's delegation, then answers with a random User ID, not the login name.",
+      "fields": [
+        "200 with state signed_in",
+        "user_id: random per Company (spec 5.1)",
+        "A replayed or mismatched session: HTTP 400 invalid_session",
+        "A bad token: HTTP 401"
       ]
     }
   ]

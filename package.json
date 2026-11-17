@@ -21,7 +21,8 @@
     "prepare": "git config core.hooksPath .githooks || true",
     "talk-track": "node scripts/build-talk-track.mjs",
     "content-pack": "node scripts/build-content-pack.mjs && node scripts/validate-content-pack.mjs",
-    "check:forbidden": "node scripts/check-forbidden-strings.mjs"
+    "check:forbidden": "node scripts/check-forbidden-strings.mjs",
+    "instructions-pdf": "node scripts/build-instructions-pdf.mjs"
   },
   "devDependencies": {
     "ajv": "^8.20.0"

@@ -10,7 +10,7 @@ import VerifyMark from "./components/VerifyMark.jsx";
 const VERSION = (() => { try { return JSON.parse(fs.readFileSync(new URL("../../package.json", import.meta.url), "utf8")).version || null; } catch { return null; } })();
 
 export const TABS = [
-  { id: "run", label: "Run it" },
+  { id: "run", label: "Start flow" },
   { id: "chat", label: "Agent chat" },
   { id: "diagram", label: "Diagram" },
   { id: "why", label: "Why Poppy" },

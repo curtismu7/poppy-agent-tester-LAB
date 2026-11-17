@@ -156,7 +156,8 @@ describe("run it", () => {
     mockApi();
     render(<App />);
     toCalls();
-    await waitFor(() => expect(screen.getByTestId("step-hint").textContent).toMatch(/^Start with Run it/));
+    await waitFor(() => expect(screen.getByTestId("step-hint").textContent).toMatch(/^Press Start flow/));
+    expect(screen.getByTestId("one-click")).toHaveTextContent("Start flow (1 click)");
     cleanup();
     mockApi({ state: DISCOVERED });
     render(<App />);
@@ -222,7 +223,7 @@ describe("shell", () => {
     expect(bar.nextElementSibling.tagName).toBe("MAIN");
     expect(bar.querySelector(".shell-brand h1")).toHaveTextContent("Poppy Agent Tester");
     expect(bar.querySelector("[data-testid=mode-badge]")).toHaveTextContent("Mock");
-    expect(bar.querySelector('.shell-nav a[aria-current="page"]')).toHaveTextContent("Run it");
+    expect(bar.querySelector('.shell-nav a[aria-current="page"]')).toHaveTextContent("Start flow");
     expect(bar.querySelector("[data-testid=top-menu]")).toHaveClass("shell-right");
     expect(document.querySelector("main").firstElementChild).toBe(screen.getByTestId("banner"));
     expect(document.querySelectorAll("h1")).toHaveLength(1);
@@ -240,7 +241,7 @@ describe("shell", () => {
     expect(screen.getByRole("link", { name: "Talk track" })).toHaveAttribute("aria-current", "page");
     expect(await screen.findByText("Why two headers")).toBeInTheDocument();
     fireEvent.keyDown(screen.getByRole("link", { name: "Talk track" }), { key: "ArrowRight" });
-    expect(screen.getByRole("link", { name: "Run it" })).toHaveAttribute("aria-current", "page");
+    expect(screen.getByRole("link", { name: "Start flow" })).toHaveAttribute("aria-current", "page");
     expect(screen.getByRole("link", { name: "Talk track" })).not.toHaveAttribute("aria-current");
   });
   it("Ctrl/Cmd+P (print) does not toggle presenter mode, and Home/End move across the nav pills", async () => {
@@ -251,10 +252,10 @@ describe("shell", () => {
     expect(screen.queryByTestId("presenter-say")).toBeNull();
     fireEvent.keyDown(window, { key: "P", metaKey: true });
     expect(screen.queryByTestId("presenter-say")).toBeNull();
-    fireEvent.keyDown(screen.getByRole("link", { name: "Run it" }), { key: "End" });
+    fireEvent.keyDown(screen.getByRole("link", { name: "Start flow" }), { key: "End" });
     expect(screen.getByRole("link", { name: "Talk track" })).toHaveAttribute("aria-current", "page");
     fireEvent.keyDown(screen.getByRole("link", { name: "Talk track" }), { key: "Home" });
-    expect(screen.getByRole("link", { name: "Run it" })).toHaveAttribute("aria-current", "page");
+    expect(screen.getByRole("link", { name: "Start flow" })).toHaveAttribute("aria-current", "page");
   });
   it("presenter mode shows the talk track and keeps the banner; Esc leaves it", async () => {
     mockApi();

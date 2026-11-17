@@ -210,7 +210,7 @@ export default function AtlasChat({ info, resetSignal }) {
   }
   else if (phase === "discovered" && !signedIn) chips.push({ label: "Where's my order?", onClick: runSignIn, disabled: !info?.configured });
   else if (phase === "signed-in") chips.push({ label: "So — where is it?", onClick: runCall });
-  else if (phase === "done") chips.push({ label: "Ask something else on the Run it tab", onClick: null, disabled: true });
+  else if (phase === "done") chips.push({ label: "Ask something else on the Start flow tab", onClick: null, disabled: true });
   else chips.push({ label: "…working", onClick: null, disabled: true });
 
   return (

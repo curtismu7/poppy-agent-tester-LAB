@@ -145,7 +145,7 @@
       "spec": "RFC 9126 (PAR), RFC 7523 (private_key_jwt) and spec section 4.2",
       "plain": "The agent sends its whole sign-in request straight to the authorization server, signed with its own private key, instead of putting it in a browser link.",
       "fields": [
-        "client_id: the agent's URL (on PingOne, the registered app ID)",
+        "client_id: the agent's URL (or the PingOne app ID)",
         "scope, redirect_uri, PKCE challenge, state",
         "client_assertion: a short-lived signed JWT (private_key_jwt)",
         "No client secret"
@@ -269,8 +269,8 @@
       "fields": [
         "200 with state signed_in",
         "user_id: random per Company (spec 5.1)",
-        "A replayed or mismatched session: HTTP 400 invalid_session",
-        "A bad token: HTTP 401"
+        "Replayed session: HTTP 400 invalid_session",
+        "Bad token: HTTP 401"
       ]
     }
   ]

@@ -97,8 +97,16 @@ test('discovery checks: version, domain, optional issuer, and a missing domain a
   assert.equal((await ok({ ...base, organization: { domain: 'someone-else.example' } })).checks.find((c) => c.id === 'domain').ok, false);
   assert.equal((await ok({ ...base, organization: undefined })).checks.find((c) => c.id === 'domain').ok, false);
   assert.equal((await ok({ ...base, organization: { domain: 'COMPANY.example' } })).checks.find((c) => c.id === 'domain').ok, true, 'case-insensitive');
-  // a port, a scheme or a path is not a bare domain name, so it fails even when the host matches without the port
+  // served on the default port the domain has no port; a scheme or a path never belongs in it; a port the origin does not have is wrong
   for (const d of ['company.example:8460', 'https://company.example', 'company.example/x']) assert.equal((await ok({ ...base, organization: { domain: d } })).checks.find((c) => c.id === 'domain').ok, false, d);
+  // Spec 1.0 section 3.1: served on a non-443 port, the domain carries the port (the 0.4 draft said bare host)
+  const portOrigin = 'https://company.example:8460';
+  const onPort = async (domain) => (await discover(portOrigin, { fetchImpl: doc({ ...base, organization: { domain } }, { resource: portOrigin, authorization_servers: ['https://pf.example'] }) })).checks.find((c) => c.id === 'domain');
+  assert.equal((await onPort('company.example:8460')).ok, true);
+  assert.equal((await onPort('COMPANY.example:8460')).ok, true, 'case-insensitive');
+  assert.equal((await onPort('company.example')).ok, false, 'a bare host is wrong when the port is not 443');
+  assert.equal((await onPort('company.example:9999')).ok, false);
+  assert.equal((await discover('https://company.example:443', { fetchImpl: doc(base) })).checks.find((c) => c.id === 'domain').ok, true, ':443 is the default and is not written');
   // auth.issuer is optional when the protected-resource document lists exactly one server
   const noIssuer = await ok({ ...base, auth: { ...base.auth, issuer: undefined } });
   assert.equal(noIssuer.issuer, 'https://pf.example');

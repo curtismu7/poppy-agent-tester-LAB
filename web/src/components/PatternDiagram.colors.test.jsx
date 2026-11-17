@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import fs from "node:fs";
 import PatternDiagram from "./PatternDiagram";
 import FLOW from "../../../server/diagrams/poppy-flow.json";
 
@@ -96,5 +97,13 @@ describe("the pop-up explains the step", () => {
     expect(screen.queryByTestId("pattern-popup")).toBeNull();
     open(3);
     expect(screen.getByTestId("pattern-popup").textContent).toContain("Step 4 of 10");
+  });
+});
+
+describe("the diagram CSS follows the UI rules", () => {
+  it("uses theme tokens only: no colour literals, and nothing purple", () => {
+    const css = fs.readFileSync(new URL("./PatternDiagram.css", import.meta.url), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
+    expect(css.match(/#[0-9a-fA-F]{3,8}\b|rgba?\(|hsla?\(/g) || []).toEqual([]);
+    expect(css).not.toMatch(/purple|violet|indigo/i);
   });
 });

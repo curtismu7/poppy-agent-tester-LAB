@@ -6,12 +6,9 @@ const pathOf = (u) => { try { const x = new URL(u); return x.pathname; } catch {
 const latest = (steps, kind) => [...(steps || [])].reverse().find((s) => s.kind === kind);
 const short = (s, n = 28) => (typeof s === "string" && s.length > n ? `${s.slice(0, n)}…` : s);
 
-const b64json = (seg) => {
-  try {
-    const bin = atob(seg.replace(/-/g, "+").replace(/_/g, "/"));
-    return JSON.parse(new TextDecoder().decode(Uint8Array.from(bin, (c) => c.charCodeAt(0))));
-  } catch { return null; }
-};
+// Rule 24b: segment decoding is the shared pane's; a segment that is not base64url JSON stays raw (the pane's null shape).
+import { decodeSegment } from "../JsonPane";
+const b64json = (seg) => { try { return decodeSegment(seg); } catch { return null; } };
 
 /**
  * An application/x-www-form-urlencoded body as its fields, so a reader sees names and values instead of one escaped line.

@@ -5,6 +5,7 @@ import AtlasChat from "./components/AtlasChat";
 import DiagramTab from "./components/DiagramTab";
 import { getJson, resetWorkspace } from "./api";
 import TopMenu, { applyFontSize } from "./top-menu/TopMenu.jsx";
+import TalkTrackDialog from "./talk-track/TalkTrackDialog.jsx";
 import VerifyMark from "./components/VerifyMark.jsx";
 
 const VERSION = (() => { try { return JSON.parse(fs.readFileSync(new URL("../../package.json", import.meta.url), "utf8")).version || null; } catch { return null; } })();
@@ -36,6 +37,7 @@ export default function App() {
   const [story, setStory] = useState(null);
   const [tab, setTab] = useState(hashTab());
   const [presenter, setPresenter] = useState(false);
+  const [talkOpen, setTalkOpen] = useState(false);
   const [resetSignal, setResetSignal] = useState(0);
   const [resetMsg, setResetMsg] = useState("");
   const [theme, setTheme] = useState(initialTheme);
@@ -111,6 +113,7 @@ export default function App() {
           theme={{ value: theme, onChange: pickTheme }}
           fontSize={{ value: fontStep, onChange: setFontStep }}
           present={{ active: presenter, onToggle: () => setPresenter((v) => !v), label: "Presenter (P)" }}
+          talkTrack={{ active: talkOpen, onToggle: () => setTalkOpen((v) => !v) }}
           shelfUrl="https://local.ping-devops.com:8443/"
           help={{ href: "https://github.com/curtismu7/poppy-agent-tester-LAB#readme" }}
           version={VERSION}
@@ -142,6 +145,8 @@ export default function App() {
           )}
         </div>
       </main>
+
+      <TalkTrackDialog isOpen={talkOpen} onClose={() => setTalkOpen(false)} talk={story?.talkTrack ?? []} />
     </div>
   );
 }

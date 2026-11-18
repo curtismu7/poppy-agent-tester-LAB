@@ -4,3 +4,6 @@ customer.config.json
 .env
 web/dist
 .launcher.*
+
+# UI redesign mock (for owner approval only; carries a host the forbidden-strings gate would fail)
+web/mock/

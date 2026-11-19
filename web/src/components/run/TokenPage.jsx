@@ -14,7 +14,7 @@ export default function TokenPage({ state }) {
   const sess = latestSession(state);
   return (
     <section className="rp-page" aria-labelledby="rp-tokens">
-      <h2 id="rp-tokens" className="rp-title rp-title--sm">Token &amp; session</h2>
+      <h2 id="rp-tokens" className="rp-title rp-title--sm"><span className="step-num" data-n="3" aria-hidden="true"></span>Token &amp; session</h2>
       <p className="muted">The two credentials this run produced, claim by claim. Everything here came off the wire.</p>
       {token?.claims?.sub && (
         <div className="rp-note" data-testid="who-is-this">

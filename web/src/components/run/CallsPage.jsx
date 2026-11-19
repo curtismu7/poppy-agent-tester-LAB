@@ -48,7 +48,7 @@ export default function CallsPage({ ui, c }) {
   const d = info?.defaults || {};
   return (
     <section className="rp-page" aria-labelledby="rp-calls">
-      <h2 id="rp-calls" className="rp-title rp-title--sm">The calls</h2>
+      <h2 id="rp-calls" className="rp-title rp-title--sm"><span className="step-num" data-n="2" aria-hidden="true"></span>The calls</h2>
       <p className="muted">Every request the agent makes, in order. Click a row to open it: the reason first, the raw wire underneath if you want it.</p>
 
       {(d.issuer || d.p1Issuer) && (

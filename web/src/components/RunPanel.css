@@ -6,14 +6,15 @@
 .rp-title--sm { font-size: var(--font-size-lg); }
 .rp-lede { margin: 0; color: var(--text-body); font-size: var(--font-size-base); line-height: 1.55; max-width: 70ch; }
 .rp-sub { margin: 6px 0 0; font-size: var(--font-size-base); }
-.rp-cards { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 230px), 1fr)); }
-.rp-cards--4 { grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr)); }
+.rp-cards { display: grid; gap: 12px; grid-template-columns: 1fr; }
+.rp-cards--4 { grid-template-columns: 1fr; }
 .rp-card { border: 1px solid var(--border); background: var(--surface); border-radius: var(--radius-lg); padding: 12px 14px; min-width: 0; }
 .rp-card h3, .rp-card h4 { margin: 0 0 6px; font-size: var(--font-size-base); }
 .rp-card p { margin: 0; font-size: var(--font-size-sm); line-height: 1.5; color: var(--text-body); }
 .rp-card .muted { margin-bottom: 8px; }
 .rp-strip { margin: 0; padding: 10px 14px; background: var(--surface-2); border: 1px solid var(--border); border-left: 3px solid var(--accent); border-radius: var(--radius-lg); font-size: var(--font-size-sm); line-height: 1.5; }
-.rp-two { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 380px), 1fr)); align-items: start; }
+.rp-two { display: grid; gap: 12px; grid-template-columns: 1fr 1fr; align-items: start; }
+@media (max-width: 900px) { .rp-two, .rp-fields { grid-template-columns: 1fr; } }
 
 /* authorization server pick and the honest-gaps box */
 .rp-as { display: flex; flex-wrap: wrap; gap: 6px 16px; align-items: center; margin: 0; padding: 8px 14px; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); }
@@ -26,7 +27,7 @@
 /* controls */
 .rp-controls { border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); padding: 10px 14px; }
 .rp-controls__main { margin: 0 0 6px; }
-.rp-fields { display: grid; gap: 0 12px; align-items: end; grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); }
+.rp-fields { display: grid; gap: 0 12px; align-items: end; grid-template-columns: 1fr 1fr; }
 .rp-fields input, .rp-opts input[type="text"], .rp-opts select, .rp-opts input:not([type]) { width: 100%; }
 .rp-steps { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0 4px; }
 /* A step you cannot take yet must look it: the shared 0.75 opacity left these looking ready. */

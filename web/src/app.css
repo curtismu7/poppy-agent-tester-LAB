@@ -72,6 +72,10 @@ details { margin: 6px 0; } summary { cursor: pointer; font-size: var(--font-size
 .presenter-say { border: 1px solid var(--status-info); background: var(--surface); border-radius: var(--radius-md); padding: 8px 14px; margin-bottom: 12px; }
 .presenter-say p { margin: 4px 0; line-height: 1.5; }
 .pat__title { margin: 0 0 4px; font-size: var(--font-size-lg); }
+/* Numbered step badge next to headings; the digit comes from data-n so heading-text tests stay green. */
+.step-num { display: inline-grid; place-items: center; min-width: 1.4rem; height: 1.4rem; border-radius: 999px;
+  background: var(--accent-gradient); color: var(--on-accent); font: 700 0.75rem var(--font-mono); margin-right: 0.5em; vertical-align: 2px; }
+.step-num::before { content: attr(data-n); }
 .app--presenter { font-size: 18px; } .app--presenter .panel h2 { font-size: var(--font-size-xl); } .app--presenter .lesson, .app--presenter .presenter-say, .app--presenter .verdict__reasons { font-size: var(--font-size-lg); }
 .app--presenter .json, .app--presenter .tbl { font-size: var(--font-size-base); }
 input { width: 100%; display: block; margin: 4px 0 8px; }

@@ -336,6 +336,13 @@ test('the person\'s sub is never declared as correlation: a short sub (8 charact
   const res = await lab.call('GET', '/api/run-observability');
   assert.ok(!res.text.includes('demouser'));
   assert.deepEqual(assertRunObservability(res.body.record), []);
+  // A product line that names the person is not matched to the run by the person's name: the lab declares no sub, so it is only window-matched.
+  const es = await fakeEs({ lines: [AUDIT('demouser')] });
+  const withLog = await boot({ cfg: { claims: { client_id: `${BASE}/client.json`, scope: 'accounts:read', sub: 'demouser' } }, extra: { runObsReaders: [new ElasticsearchReader({ url: es.url, apiKey: ESKEY })] } });
+  await withLog.signedIn(); await withLog.step3();
+  const logged = (await withLog.rec()).record.rows.filter((x) => x.origin === 'logged');
+  assert.equal(logged.length, 1);
+  assert.equal(logged[0].matchedBy, 'window');
 });
 
 test('reading a finished run twice searches the same window: its last event plus a fixed grace', async () => {

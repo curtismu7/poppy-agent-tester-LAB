@@ -1,5 +1,8 @@
 // Runtime netguard. Every non-loopback socket, DNS lookup, fetch and UDP send is refused and recorded, except to hosts the
 // visitor typed (permitHost). This app talks to a real Company and a real PingFederate, so those two origins are the only way out.
+// One named exception to "typed hosts only": the vendored shared run-observability Elasticsearch reader (runObservabilityReaders.js) reads a
+// LOOPBACK RUN_OBS_ES_URL with its own fetch, Real mode only (the Mock record builds no reader call). Loopback already passes this guard,
+// so nothing is opened for it; any other host stays refused.
 import dns from 'node:dns';
 import net from 'node:net';
 import dgram from 'node:dgram';

@@ -4,6 +4,10 @@
 const host = (u) => { try { return new URL(u).host; } catch { return ""; } };
 const pathOf = (u) => { try { const x = new URL(u); return x.pathname; } catch { return String(u || ""); } };
 const latest = (steps, kind) => [...(steps || [])].reverse().find((s) => s.kind === kind);
+// A step the server logged with an `error` and no request (a sign-in redirect that came back with an error, a code exchange that threw)
+// has nothing on the wire to show: its row says so instead of reading a request that is not there.
+const noWire = (s) => Boolean(s) && !s.request;
+const errorText = (s) => `${s.error}${s.detail ? `: ${s.detail}` : ""}`;
 const short = (s, n = 28) => (typeof s === "string" && s.length > n ? `${s.slice(0, n)}…` : s);
 
 // Rule 24b: segment decoding is the shared pane's; a segment that is not base64url JSON stays raw (the pane's null shape).
@@ -87,14 +91,14 @@ export function buildRows(state) {
     });
   }
   rows.push({
-    id: "authorize", method: "GET", path: auth ? pathOf(auth.request.url) : "(authorization endpoint, in the browser)", status: auth ? "browser" : null, why: WHY.authorize,
-    kv: auth ? [["Host", host(auth.request.url)]] : [],
-    raw: auth ? [{ label: "Address the browser opened", value: auth.request.url }] : [],
+    id: "authorize", method: "GET", path: auth && !noWire(auth) ? pathOf(auth.request.url) : "(authorization endpoint, in the browser)", status: noWire(auth) ? "error" : auth ? "browser" : null, why: WHY.authorize,
+    kv: noWire(auth) ? [["Error", errorText(auth)]] : auth ? [["Host", host(auth.request.url)]] : [],
+    raw: auth && !noWire(auth) ? [{ label: "Address the browser opened", value: auth.request.url }] : [],
   });
   rows.push({
-    id: "token", method: "POST", path: tok ? pathOf(tok.request.url) : "(token endpoint) authorization_code + PKCE", status: tok?.response?.status ?? null, why: WHY.token,
-    kv: tok ? [["Host", host(tok.request.url)], ["Content-Type", "application/x-www-form-urlencoded"]] : [],
-    raw: tok ? [...formRequest(tok.request.body), { label: "Response", value: tok.response.body }] : [],
+    id: "token", method: "POST", path: tok && !noWire(tok) ? pathOf(tok.request.url) : "(token endpoint) authorization_code + PKCE", status: noWire(tok) ? "error" : tok?.response?.status ?? null, why: WHY.token,
+    kv: noWire(tok) ? [["Error", errorText(tok)]] : tok ? [["Host", host(tok.request.url)], ["Content-Type", "application/x-www-form-urlencoded"]] : [],
+    raw: tok && !noWire(tok) ? [...formRequest(tok.request.body), { label: "Response", value: tok.response.body }] : [],
   });
   rows.push({
     id: "call", method: "GET", path: call ? pathOf(call.request.url) : "/poppy/api/v1/me", status: call?.response?.status ?? null, why: WHY.call,

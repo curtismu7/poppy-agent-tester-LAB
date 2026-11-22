@@ -26,6 +26,9 @@ import { buildSample } from './sample.js';
 import { shelfInfo } from './shelfLink.js';
 import { chatTurn, MAX_TEXT } from './chatAgent.js';
 import { registeredFrom, registeredProblem, clientFor, sameIssuer } from './registered.js';
+import { RunObsError } from './runObservability.js';
+import { addEvent, buildMockRecord, buildRealRecord, currentRun, decisionLine, lineValue, redirectErrorOutcome, replyOutcome, startRun } from './runObs.js';
+import { sampleEvents } from './sample.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const WEB_DIST = process.env.WEB_DIST || path.resolve(HERE, '../../web/dist');
@@ -38,7 +41,7 @@ const SCOPE_RE = /^[\x21\x23-\x5b\x5d-\x7e]+( [\x21\x23-\x5b\x5d-\x7e]+)*$/;
 
 const safePath = (p) => typeof p === 'string' && /^\/[A-Za-z0-9._~!$&'()*+,;=:@%/-]*$/.test(p) && !p.includes('//') && !p.split('/').includes('..');
 
-export function createApp({ configFile = CONFIG, agent, health = createHealth({ runtime: hostedFrom() ? 'offline' : 'live' }), hosted = hostedFrom(), baseUrl = baseUrlFrom(), sessions = createSessions(), fetchImpl = (...a) => globalThis.fetch(...a), proxyHosts = new Set(), chat = null, registered = registeredFrom() } = {}) {
+export function createApp({ configFile = CONFIG, agent, health = createHealth({ runtime: hostedFrom() ? 'offline' : 'live' }), hosted = hostedFrom(), baseUrl = baseUrlFrom(), sessions = createSessions(), fetchImpl = (...a) => globalThis.fetch(...a), proxyHosts = new Set(), chat = null, registered = registeredFrom(), log = (line) => process.stdout.write(`${line}\n`), runObsReaders } = {}) {
   // Rule 19: the mode is a mutable holder so POST /api/mode can switch at runtime. Every gate below reads
   // holder.hosted. A hosted build cannot switch to real: realAvailable is false there (no agent config), so it fails closed.
   const holder = { hosted };
@@ -55,6 +58,11 @@ export function createApp({ configFile = CONFIG, agent, health = createHealth({ 
   // The visitor's typed hosts are reachable only for a short window, renewed right before each call (see netguard.js).
   const reach = (...urls) => { for (const u of urls) permitHost(new URL(u).hostname); };
   const pendingByState = new Map(); // state -> workspace id, for the redirect that carries no header
+  // Rule 27: every reply the lab receives is one event for the run-observability panel and one stdout line (who decided, the outcome, no token).
+  const observe = (rec, e) => log(decisionLine(addEvent(rec.obs, { source: 'real', ...e })));
+  const said = (who, what, status, outcome) => `${who} ${outcome === 'allowed' ? 'accepted' : outcome === 'refused' ? 'turned down' : `answered with HTTP ${status} for`} ${what}${outcome === 'info' ? `; the lab cannot read that as an accept or a turn-down` : ` (HTTP ${status})`}. This is a reply the lab received, not a log line.`;
+  // A fetch that threw: the lab has no reply to show. Its row is information, and the stdout line says no-reply.
+  const noReply = (rec, runId, { step, layer, actor, product, message }) => observe(rec, { runId, step, layer, actor, outcome: 'info', result: 'no-reply', product, message });
   const ready = () => (agent && baseUrl ? null : 'agent_not_configured');
   const realAvailable = () => Boolean(agent && baseUrl);
 
@@ -68,7 +76,7 @@ export function createApp({ configFile = CONFIG, agent, health = createHealth({ 
     pendingByState.delete(String(req.query.state || ''));
     const rec = ws && sessions.get(ws);
     if (!rec?.pending || rec.pending.state !== req.query.state) return res.status(400).type('text').send('Unknown or expired sign-in. Start again from the page.');
-    const { verifier, useResource, returnTo, from } = rec.pending;
+    const { verifier, useResource, returnTo, from, runId } = rec.pending;
     rec.pending = null;
     // The sign-in redirect may land on the public agent name, which serves nothing else; send the browser back to the loopback page.
     // Back to the tab the sign-in started from (#chat, #run), so the person lands where they were.
@@ -78,10 +86,14 @@ export function createApp({ configFile = CONFIG, agent, health = createHealth({ 
     // A repeated or array-valued iss (?iss[]=...) is not a string and is refused, never coerced.
     const iss = req.query.iss === undefined ? undefined : (typeof req.query.iss === 'string' ? req.query.iss : null);
     if ((iss !== undefined && iss !== rec.config.issuerClaim) || (iss === undefined && rec.config.issParamRequired)) {
+      observe(rec, { runId, step: 'sign-in-redirect', layer: 'person', actor: 'lab', outcome: 'blocked', product: 'Lab check (RFC 9207)', message: iss === undefined ? "The lab's own check blocked the sign-in: the redirect came back without the issuer identifier this issuer always sends (RFC 9207)." : "The lab's own check blocked the sign-in: the redirect carried an issuer identifier that is not the one this sign-in started with (RFC 9207)." });
       sessions.log(ws, { kind: 'authorize', error: 'iss_mismatch', detail: iss === null ? 'redirect carried iss more than once or not as text' : `redirect iss ${iss === undefined ? 'missing' : iss.slice(0, 120)} does not match ${rec.config.issuerClaim}` });
       return res.redirect(home('signin=error'));
     }
-    if (req.query.error) { sessions.log(ws, { kind: 'authorize', error: String(req.query.error).slice(0, 80), detail: String(req.query.error_description || '').slice(0, 200) }); return res.redirect(home('signin=error')); }
+    if (req.query.error) {
+      const code = lineValue(req.query.error, 40);
+      const outcome = redirectErrorOutcome(code);
+      observe(rec, { runId, step: 'sign-in-redirect', layer: 'person', actor: 'issuer', outcome, product: 'Issuer redirect', message: `The issuer sent the browser back with error ${code}: the sign-in did not complete${outcome === 'refused' ? ', and the issuer decided no' : ', which is not a decision about this person or agent'}. This is a reply the lab received, not a log line.` }); sessions.log(ws, { kind: 'authorize', error: String(req.query.error).slice(0, 80), detail: String(req.query.error_description || '').slice(0, 200) }); return res.redirect(home('signin=error')); }
     try {
       const req2 = tokenRequest({ tokenEndpoint: rec.config.tokenEndpoint, clientId: rec.config.client.id, issuer: rec.config.issuerClaim, ...assertionFor(rec.config, rec.config.tokenEndpoint), kid: agent.kid, signingKey: agent.privateKey, code: String(req.query.code || ''), redirectUri: redirectUri(), verifier, resource: useResource ? rec.config.resource : undefined });
       reach(req2.url);
@@ -89,9 +101,12 @@ export function createApp({ configFile = CONFIG, agent, health = createHealth({ 
       const text = await readClipped(r, MAX_BODY);
       let body; try { body = JSON.parse(text); } catch { body = null; }
       sessions.log(ws, { kind: 'token', request: { method: 'POST', url: req2.url, body: req2.body }, response: { status: r.status, body: body ?? text } });
-      if (r.ok && body?.access_token) rec.token = { access_token: body.access_token, scope: body.scope, expires_in: body.expires_in, claims: decodeJws(body.access_token)?.payload ?? null };
+      if (r.ok && body?.access_token) { rec.token = { access_token: body.access_token, scope: body.scope, expires_in: body.expires_in, claims: decodeJws(body.access_token)?.payload ?? null }; rec.obs.tokenRun = runId; }
+      const outcome = replyOutcome(r.status, { usable: Boolean(body?.access_token), oauth: true });
+      observe(rec, { runId, step: 'code-exchange', layer: 'person', actor: 'issuer', outcome, product: 'Issuer reply', message: said('The issuer', 'the sign-in code exchange', r.status, outcome), detail: { status: r.status } });
       return res.redirect(home(r.ok ? 'signin=ok' : 'signin=error'));
     } catch (e) {
+      observe(rec, { runId, step: 'code-exchange', layer: 'person', actor: 'issuer', outcome: 'info', result: 'no-reply', product: 'Issuer reply', message: 'The code exchange did not complete, so there is no issuer reply to show.' });
       sessions.log(ws, { kind: 'token', error: e.message });
       return res.redirect(home('signin=error'));
     }
@@ -126,7 +141,34 @@ export function createApp({ configFile = CONFIG, agent, health = createHealth({ 
   // customer.config.json is read on every request so editing it shows up on reload (rule 12).
   api.get('/story', (req, res) => { res.set('Cache-Control', 'no-store'); res.json({ ...buildStory(loadCast(configFile, verticalFrom(req.query.vertical))), verticals: Object.keys(VERTICALS) }); });
   // An example run (invented values, real shape): what the hosted build shows instead of reaching a real Company.
-  api.get('/sample', (_req, res) => { res.set('Cache-Control', 'no-store'); res.json(buildSample()); });
+  // The example's own events are logged once, when it is first built (their stamps are the line times).
+  let exampleLogged = false;
+  const exampleEvents = () => {
+    buildSample();
+    const events = sampleEvents();
+    if (!exampleLogged) { exampleLogged = true; for (const e of events) log(decisionLine(e)); }
+    return events;
+  };
+  api.get('/sample', (_req, res) => { exampleEvents(); res.set('Cache-Control', 'no-store'); res.json(buildSample()); });
+  // Rule 27: what each layer logged for this workspace's current run. Mock: the example's own signings (simulated). Real: the replies the
+  // lab received (response) plus the products' logs read from Elasticsearch (logged). Same-origin JSON; a failure is {error, message}.
+  api.get('/run-observability', async (req, res) => {
+    const ws = workspaceFrom(req);
+    if (!ws) return res.status(400).json({ error: 'bad_workspace', message: 'The workspace id is not valid.' });
+    res.set('Cache-Control', 'no-store');
+    try {
+      if (holder.hosted) return res.json({ record: await buildMockRecord({ events: exampleEvents() }) });
+      const { obs } = sessions.get(ws);
+      const events = currentRun(obs);
+      if (!events.length) return res.json({ record: null, message: 'No run yet in this workspace: read a Company (step 1) to start one.' });
+      const record = await buildRealRecord({ events, kind: obs.client?.kind ?? null, who: { actor: obs.client?.id, traceId: obs.traceId }, readers: runObsReaders });
+      return res.json({ record });
+    } catch (e) {
+      console.error(`[poppy-agent-tester] run-observability failed: ${String(e?.code || e?.name || 'Error').slice(0, 40)}: ${String(e?.message).replace(/[\r\n]+/g, ' ').slice(0, 200)}`);
+      if (e instanceof RunObsError) return res.status(e.status).json({ error: e.code, message: e.message });
+      return res.status(500).json({ error: 'internal_error', message: 'The run observability record could not be built.' });
+    }
+  });
   api.get('/diagram', (req, res) => { res.set('Cache-Control', 'no-store'); const name = DIAGRAM_NAMES.includes(req.query.name) ? req.query.name : DIAGRAM_NAMES[0]; res.json(buildDiagram(name)); });
 
   // Discovery needs no agent identity; sign-in and calls do (needsAgent).
@@ -154,29 +196,53 @@ export function createApp({ configFile = CONFIG, agent, health = createHealth({ 
     const origin = parseOrigin(typed);
     const issuer = parseOrigin(typedIssuer);
     reach(origin);
-    const d = await discover(origin, { fetchImpl });
+    // A run starts when the Company is read, before its documents can fail to arrive (a 404 is part of the run, not "no run yet").
+    const seen = sessions.get(ws);
+    const runId = startRun(seen.obs);
+    let d;
+    try { d = await discover(origin, { fetchImpl }); } catch (e) {
+      if (e instanceof DiscoverError) observe(seen, { runId, step: 'read-company', layer: 'resource', actor: 'company', outcome: 'info', product: 'Company reply', message: `The Company answered, but its documents could not be used (${e.code}). This is a reply the lab received, not a log line.` });
+      else noReply(seen, runId, { step: 'read-company', layer: 'resource', actor: 'company', product: 'Company reply', message: 'The Company did not answer, so there is no reply to show.' });
+      throw e;
+    }
     sessions.log(ws, { kind: 'discover', request: { urls: [d.poppyUrl, d.resourceUrl] }, response: { checks: d.checks } });
+    seen.obs.client = clientFor({ registered, baseUrl, issuerClaim: d.issuer });
+    const passed = d.checks.filter((c) => c.ok).length;
+    observe(seen, { runId, step: 'read-company', layer: 'resource', actor: 'company', outcome: 'info', product: 'Company reply', message: `The Company served both of its documents. The lab's checks on them: ${passed} of ${d.checks.length} passed${passed < d.checks.length ? ' (the page lists which did not)' : ''}. This is a reply the lab received, not a log line.`, detail: { checks: d.checks.length, passed } });
+    // The lab's own checks can stop a run here. Each leaves one event and one stdout line, and says it is the lab's own stop.
+    const stop = (outcome, step, message) => observe(seen, { runId, step, layer: 'person', actor: 'lab', outcome, result: 'stopped', product: 'Lab check', message: `The lab's own check stopped this run: ${message}` });
     const brief = { ok: false, checks: d.checks, poppy: d.poppy, resource: d.resource };
-    if (!d.issuer || new URL(d.issuer).origin !== issuer) return res.status(400).json({ error: 'issuer_mismatch', message: `The Company publishes issuer ${d.issuer ?? '(none)'}, not the one you typed (${issuer}).`, published: d.issuer ?? null, discovery: brief });
+    if (!d.issuer || new URL(d.issuer).origin !== issuer) {
+      stop('blocked', 'issuer-check', 'the issuer you typed is not the issuer the Company publishes.');
+      return res.status(400).json({ error: 'issuer_mismatch', message: `The Company publishes issuer ${d.issuer ?? '(none)'}, not the one you typed (${issuer}).`, published: d.issuer ?? null, discovery: brief });
+    }
     // The PingOne issuer needs the registered client_id; say so before anything is sent to it.
     if (!registered && sameIssuer(d.issuer, demoDefaultsFrom().p1Issuer)) {
       const problem = registeredProblem();
+      stop('info', 'client-check', problem ? 'the registered PingOne client settings are invalid here.' : 'this issuer is the configured PingOne issuer, which needs a registered client id that is not set here.');
       if (problem) return res.status(409).json({ error: 'registered_config_invalid', message: `This issuer is the configured PingOne issuer, but its registered-client settings are invalid: ${problem}.`, discovery: brief });
       return res.status(409).json({ error: 'registered_client_missing', message: 'This issuer is the configured PingOne issuer, and PingOne has no CIMD, so the agent needs a registered client_id. Set PAT_P1_CLIENT_ID (the PingOne application id) and restart.', discovery: brief });
     }
     reach(issuer);
     let im;
     try { im = await fetchIssuerMetadata(d.issuer, { fetchImpl }); } catch (e) {
+      stop('info', 'issuer-metadata', "the issuer's metadata could not be read.");
       return res.status(400).json({ error: 'issuer_metadata', message: `Could not read the issuer's metadata (${e.message})`, discovery: brief });
     }
     const meta = im.meta;
-    if (!meta?.authorization_endpoint || !meta?.token_endpoint) return res.status(400).json({ error: 'issuer_metadata', message: `${im.url} has no authorization_endpoint and token_endpoint`, discovery: brief });
+    if (!meta?.authorization_endpoint || !meta?.token_endpoint) {
+      stop('info', 'issuer-metadata', "the issuer's metadata lists no authorization and token endpoint.");
+      return res.status(400).json({ error: 'issuer_metadata', message: `${im.url} has no authorization_endpoint and token_endpoint`, discovery: brief });
+    }
     // RFC 9126: the endpoint where the authorization parameters are pushed. Same-origin rule as the other two endpoints.
     const parEndpoint = typeof meta.pushed_authorization_request_endpoint === 'string' ? meta.pushed_authorization_request_endpoint : null;
     const parRequired = meta.require_pushed_authorization_requests === true;
     for (const e of [meta.authorization_endpoint, meta.token_endpoint, ...(parEndpoint ? [parEndpoint] : [])]) {
       let o = null; try { o = new URL(e).origin; } catch { /* not a URL */ }
-      if (o !== issuer) return res.status(400).json({ error: 'endpoint_origin', message: 'Issuer metadata points at another origin; refused.', discovery: brief });
+      if (o !== issuer) {
+        stop('blocked', 'endpoint-check', "the issuer's metadata points at another origin.");
+        return res.status(400).json({ error: 'endpoint_origin', message: 'Issuer metadata points at another origin; refused.', discovery: brief });
+      }
     }
     // protected_resources (spec 3): the issuer should list this resource. PingFederate has no setting for it, so it is shown as a warning, not hidden.
     const checks = [
@@ -222,7 +288,9 @@ export function createApp({ configFile = CONFIG, agent, health = createHealth({ 
     }
     // The page tab that started the sign-in: a short lowercase name only, used as the return fragment and nothing else.
     const from = typeof req.body?.from === 'string' && /^[a-z]{1,16}$/.test(req.body.from) ? req.body.from : null;
-    rec.pending = { state, verifier: pkce.verifier, useResource, returnTo, from };
+    // A sign-in joins the open run; once the last run has ended (its first Company call), a new sign-in begins a new run.
+    const runId = rec.obs.open ?? startRun(rec.obs, rec.obs.client);
+    rec.pending = { state, verifier: pkce.verifier, useResource, returnTo, from, runId };
     rec.config.scope = scope;
     pendingByState.set(state, ws);
     if (pendingByState.size > 1000) pendingByState.delete(pendingByState.keys().next().value);
@@ -236,10 +304,18 @@ export function createApp({ configFile = CONFIG, agent, health = createHealth({ 
       // open the authorization endpoint with only client_id and the request_uri. A refusal is shown, never quietly downgraded.
       const par = parRequest({ parEndpoint: rec.config.parEndpoint, clientId, issuer: rec.config.issuerClaim, ...assertionFor(rec.config, rec.config.parEndpoint), kid: agent.kid, signingKey: agent.privateKey, redirectUri: redirectUri(), scope, state, challenge: pkce.challenge, resource, loginHint });
       reach(par.url);
-      const r = await fetchImpl(par.url, { method: 'POST', headers: par.headers, body: par.body, redirect: 'manual', signal: AbortSignal.timeout(10000) });
-      const text = await readClipped(r, MAX_BODY);
+      let r; let text;
+      try {
+        r = await fetchImpl(par.url, { method: 'POST', headers: par.headers, body: par.body, redirect: 'manual', signal: AbortSignal.timeout(10000) });
+        text = await readClipped(r, MAX_BODY);
+      } catch (e) {
+        noReply(rec, runId, { step: 'push-request', layer: 'agent', actor: 'issuer', product: 'Issuer PAR reply', message: "The pushed sign-in request did not complete, so there is no issuer reply to show." });
+        throw e;
+      }
       let body; try { body = JSON.parse(text); } catch { body = text; }
       sessions.log(ws, { kind: 'par', request: { method: 'POST', url: par.url, body: par.body }, response: { status: r.status, body } });
+      const outcome = replyOutcome(r.status, { usable: typeof body?.request_uri === 'string', oauth: true });
+      observe(rec, { runId, step: 'push-request', layer: 'agent', actor: 'issuer', outcome, product: 'Issuer PAR reply', message: said('The issuer', "the agent's pushed sign-in request", r.status, outcome), detail: { status: r.status } });
       if (!r.ok || typeof body?.request_uri !== 'string') {
         rec.pending = null; pendingByState.delete(state);
         return res.status(502).json({ error: 'par_failed', message: `The issuer refused the pushed authorization request (HTTP ${r.status}${typeof body?.error === 'string' ? `, ${body.error.slice(0, 80)}` : ''}).` });
@@ -272,11 +348,22 @@ export function createApp({ configFile = CONFIG, agent, health = createHealth({ 
     const callUrl = new URL(url);
     const headers = { authorization: `Bearer ${rec.token.access_token}`, 'poppy-session': session, 'poppy-version': SUPPORTED_VERSION, traceparent: tp, accept: 'application/json', 'x-forwarded-host': callUrl.host, 'x-forwarded-proto': callUrl.protocol.replace(':', '') };
     reach(url);
-    const r = await fetchImpl(url, { method: 'GET', headers, redirect: 'manual', signal: AbortSignal.timeout(10000) });
-    const text = await readClipped(r, MAX_BODY);
+    // The first Company call of a run is its last event; later calls (and a call whose token came from another run) join no record.
+    const runId = rec.obs.tokenRun !== null && rec.obs.tokenRun === rec.obs.open ? rec.obs.open : null;
+    let r; let text;
+    try {
+      r = await fetchImpl(url, { method: 'GET', headers, redirect: 'manual', signal: AbortSignal.timeout(10000) });
+      text = await readClipped(r, MAX_BODY);
+    } catch (e) {
+      noReply(rec, runId, { step: 'call-company', layer: 'resource', actor: 'company', product: 'Company reply', message: 'The signed call did not complete, so there is no Company reply to show.' });
+      throw e;
+    }
     let body; try { body = JSON.parse(text); } catch { body = text; }
     const step = { kind: 'call', request: { method: 'GET', url, headers, session: { header: decodeJws(session)?.header, payload: decodeJws(session)?.payload }, delegation: decodeJws(delegation) }, response: { status: r.status, body } };
     sessions.log(ws, step);
+    const outcome = replyOutcome(r.status, { usable: body !== null && typeof body === 'object' });
+    observe(rec, { runId, step: 'call-company', layer: 'resource', actor: 'company', outcome, product: 'Company reply', message: said('The Company', 'the signed call', r.status, outcome), detail: { status: r.status } });
+    if (runId) { rec.obs.traceId = trace.traceId; rec.obs.open = null; rec.obs.tokenRun = null; }
     return res.json({ ...step, traceId: trace.traceId });
   };
   api.post('/call', live(callStep));

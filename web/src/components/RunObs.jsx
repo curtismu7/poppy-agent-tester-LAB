@@ -22,7 +22,8 @@ export default function RunObs({ mode, tick, reset }) {
   // null = nothing asked yet; { mode, pending, record, message } = asked in `mode`; a record from the other mode is never shown.
   const [state, setState] = useState(null);
   const [again, setAgain] = useState(0);
-  const seenTick = useRef(tick);
+  const seen = useRef({ tick, mode });
+  const armed = useRef(false); // a step asked for a late re-read that has not fired yet
   useEffect(() => {
     if (mode !== "mock" && mode !== "real") return undefined;
     let live = true;
@@ -34,16 +35,19 @@ export default function RunObs({ mode, tick, reset }) {
       );
     };
     load();
-    // Only a step (a new tick) earns the late re-read, not a mode switch or a Re-read press.
-    const stepped = tick !== seenTick.current;
-    seenTick.current = tick;
-    const later = mode === "real" && stepped ? setTimeout(load, REREAD_MS) : null;
+    // Only a step (a new tick) earns the late re-read, not a mode switch or a Re-read press. A pending late re-read survives them: the
+    // timer is cleared with the effect, so it is armed again for a full wait until it has fired once.
+    if (seen.current.mode !== mode) armed.current = false;
+    else if (seen.current.tick !== tick) armed.current = true;
+    seen.current = { tick, mode };
+    const later = mode === "real" && armed.current ? setTimeout(() => { armed.current = false; load(); }, REREAD_MS) : null;
     return () => { live = false; clearTimeout(later); };
   }, [mode, tick, again, reset]);
 
   if (mode !== "mock" && mode !== "real") return null;
   const mine = state && state.mode === mode ? state : null;
-  const body = !mine || (mine.pending && !mine.record)
+  // "Collecting" only until the first answer; a reload keeps showing the answer it has (a record, or the route's message).
+  const body = !mine || (mine.pending && !("record" in mine))
     ? <Note testId="ro-loading">Collecting this run's logs...</Note>
     : !mine.record && mine.message
       ? <><h2>{TITLE}</h2><Note testId="ro-none">{mine.message}</Note></>
@@ -52,7 +56,7 @@ export default function RunObs({ mode, tick, reset }) {
     <div className="rp-obs" data-testid="rp-obs">
       {body}
       {mode === "real" && <p><button type="button" onClick={() => setAgain((n) => n + 1)} disabled={Boolean(mine?.pending)} data-testid="ro-reread">Re-read logs</button></p>}
-      <p className="ro-muted" data-testid="ro-lanes-note">In this lab: Person is the issuer's sign-in reply, Agent is the personal agent (its own signing in Mock, the issuer's answer to its pushed request in Real; no on-behalf-of exchange happens here), and Resource server is the Company, a Poppy server rather than an MCP server. Authorize, Privilege and Agent gateway are not used.</p>
+      <p className="ro-muted" data-testid="ro-lanes-note">In this lab: Person is the issuer's sign-in reply, Agent is the personal agent (its own signing in Mock, the issuer's answer to its pushed request in Real; no on-behalf-of exchange happens here), and Resource server is the Company, a Poppy server rather than an MCP server. The lab's own checks on a sign-in or on the Company's documents appear in these lanes too and say they are the lab's own. Authorize, Privilege and Agent gateway are not used.</p>
     </div>
   );
 }

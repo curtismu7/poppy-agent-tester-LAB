@@ -10,7 +10,7 @@ import { createHealth } from '../src/health.js';
 import { generateEs256Key, jwkThumbprint } from '../src/jose.js';
 import { assertRunObservability, classify, layerMatchers } from '../src/runObservability.js';
 import { ElasticsearchReader } from '../src/runObservabilityReaders.js';
-import { MAX_EVENTS, addEvent, buildRealRecord, currentRun, decisionLine, freshObs, lineValue, replyOutcome, startRun } from '../src/runObs.js';
+import { GRACE_MS, MAX_EVENTS, addEvent, buildRealRecord, currentRun, decisionLine, freshObs, lineValue, replyOutcome, startRun } from '../src/runObs.js';
 import { sampleEvents } from '../src/sample.js';
 
 const CO = 'https://company.example';
@@ -29,19 +29,23 @@ const jsonRes = (status, body) => new Response(typeof body === 'string' ? body :
 // A fake Company and a fake issuer behind the lab's fetch. `cfg` changes what they answer.
 function makeFetch(cfg = {}) {
   const seen = { par: [], tokenForms: 0, calls: 0 };
-  const meta = () => ({ issuer: ISS, authorization_endpoint: `${ISS}/as/authorization.oauth2`, token_endpoint: `${ISS}/as/token.oauth2`, pushed_authorization_request_endpoint: `${ISS}/as/par.oauth2`, authorization_response_iss_parameter_supported: cfg.issRequired === true });
+  const meta = () => ({ issuer: ISS, authorization_endpoint: `${ISS}/as/authorization.oauth2`, token_endpoint: `${ISS}/as/token.oauth2`, pushed_authorization_request_endpoint: `${ISS}/as/par.oauth2`, authorization_response_iss_parameter_supported: cfg.issRequired === true, ...(cfg.metaOverride || {}) });
   const claims = cfg.claims ?? { client_id: `${BASE}/client.json`, scope: 'accounts:read', sub: 'person-1' };
   const access = `${Buffer.from('{"alg":"none"}').toString('base64url')}.${Buffer.from(JSON.stringify(claims)).toString('base64url')}.s`;
   const f = async (url, init = {}) => {
     const u = new URL(url);
     if (u.origin === CO) {
-      if (u.pathname === '/.well-known/poppy.json') return jsonRes(200, { protocol_version: '1.0', organization: { domain: u.host }, auth: { issuer: ISS, scopes: { 'accounts:read': 'Read accounts' }, scope_hints: { 'accounts:read': { changes: 'none', personal_data: true } } } });
+      if (cfg.docsThrow && u.pathname.startsWith('/.well-known/')) throw new Error('connect ECONNREFUSED');
+      if (cfg.docsStatus && u.pathname.startsWith('/.well-known/')) return jsonRes(cfg.docsStatus, { error: 'nope' });
+      if (cfg.callThrow && u.pathname.startsWith('/poppy/')) throw new Error('socket hang up');
+      if (u.pathname === '/.well-known/poppy.json') return jsonRes(200, { protocol_version: cfg.badVersion ? '9.0' : '1.0', organization: { domain: u.host }, auth: { issuer: ISS, scopes: { 'accounts:read': 'Read accounts' }, scope_hints: { 'accounts:read': { changes: 'none', personal_data: true } } } });
       if (u.pathname === '/.well-known/oauth-protected-resource') return jsonRes(200, { resource: CO, authorization_servers: [ISS] });
       seen.calls += 1;
       return jsonRes(cfg.callStatus ?? 200, cfg.callBody ?? { user_id: 'person-1' });
     }
     if (u.origin === ISS) {
-      if (u.pathname.startsWith('/.well-known/')) return jsonRes(200, meta());
+      if (u.pathname.startsWith('/.well-known/')) return cfg.metaStatus ? jsonRes(cfg.metaStatus, { error: 'nope' }) : jsonRes(200, meta());
+      if (u.pathname === '/as/par.oauth2' && cfg.parThrow) throw new Error('socket hang up');
       if (u.pathname === '/as/par.oauth2') { seen.par.push(String(init.body)); return cfg.parStatus && cfg.parStatus !== 201 ? jsonRes(cfg.parStatus, { error: 'invalid_client' }) : jsonRes(201, { request_uri: 'urn:ietf:params:oauth:request_uri:abc', expires_in: 60 }); }
       if (u.pathname === '/as/token.oauth2') { seen.tokenForms += 1; return cfg.tokenStatus && cfg.tokenStatus !== 200 ? jsonRes(cfg.tokenStatus, { error: 'invalid_grant' }) : jsonRes(200, { access_token: access, token_type: 'Bearer', expires_in: 60, scope: 'accounts:read' }); }
     }
@@ -163,7 +167,7 @@ test('Real, a refused sign-in: the issuer turned the code exchange down, and not
   const r = (await lab.rec()).record;
   assert.deepEqual(assertRunObservability(r), []);
   assert.deepEqual(rows(r, 'person').map((x) => x.outcome), ['refused']);
-  assert.deepEqual(rows(r, 'resource').map((x) => x.message.slice(0, 22)), ['The Company answered w'], 'only the documents reply: no Company call ran');
+  assert.deepEqual(rows(r, 'resource').map((x) => x.message.slice(0, 22)), ['The Company served bot'], 'only the documents reply: no Company call ran');
   assert.deepEqual(r.summary, { allowed: 1, refused: 1, blocked: 0, info: 1, unverified: 0 });
   assert.ok(lab.lines.some((l) => /step=code-exchange .* result=stopped/.test(l)));
 });
@@ -190,19 +194,163 @@ test('Real, a Company that turns the call down (403) is refused; a 200 with no J
   assert.deepEqual(assertRunObservability(b), []);
 });
 
-test('Real, a redirect that carries the wrong issuer: the lab stopped the sign-in, shown as information; an issuer error is a refusal', async () => {
+test('Real, a redirect that carries the wrong issuer is BLOCKED by the lab\'s own check (RFC 9207), and says so; no code exchange runs', async () => {
   const lab = await boot();
   await lab.step1(); await lab.step2();
   await lab.back({ code: 'C1', state: lab.stateOf(), iss: 'https://other.example' });
-  let r = (await lab.rec()).record;
-  assert.deepEqual(rows(r, 'person').map((x) => `${x.outcome}`), ['info']);
-  assert.match(rows(r, 'person')[0].message, /stopped the sign-in/);
+  const r = (await lab.rec()).record;
+  assert.deepEqual(rows(r, 'person').map((x) => x.outcome), ['blocked']);
+  assert.match(rows(r, 'person')[0].message, /lab's own check blocked the sign-in/);
+  assert.equal(rows(r, 'person')[0].product, 'Lab check (RFC 9207)');
   assert.equal(lab.seen.tokenForms, 0, 'no code exchange ran');
-  await lab.step2();
-  await lab.back({ error: 'access_denied', state: lab.stateOf(), iss: ISS });
-  r = (await lab.rec()).record;
-  assert.deepEqual(rows(r, 'person').map((x) => x.outcome), ['info', 'refused']);
+  assert.equal(r.summary.blocked, 1);
+  assert.ok(lab.lines.some((l) => /step=sign-in-redirect layer=person actor=lab result=stopped/.test(l)));
   assert.deepEqual(assertRunObservability(r), []);
+  // The same stop when the issuer says it always sends iss and the redirect has none.
+  const need = await boot({ cfg: { issRequired: true } });
+  await need.step1(); await need.step2();
+  await need.back({ code: 'C1', state: need.stateOf() });
+  assert.deepEqual(rows((await need.rec()).record, 'person').map((x) => x.outcome), ['blocked']);
+});
+
+test('an issuer error redirect is a refusal only when the issuer decided no; a failure of the issuer is information', async () => {
+  const cases = { access_denied: 'refused', unauthorized_client: 'refused', invalid_scope: 'refused', server_error: 'info', temporarily_unavailable: 'info', invalid_request: 'info', unsupported_response_type: 'info', something_new: 'info' };
+  for (const [code, outcome] of Object.entries(cases)) {
+    const lab = await boot();
+    await lab.step1(); await lab.step2();
+    await lab.back({ error: code, state: lab.stateOf(), iss: ISS });
+    const r = (await lab.rec()).record;
+    assert.deepEqual(rows(r, 'person').map((x) => x.outcome), [outcome], code);
+    assert.deepEqual(assertRunObservability(r), []);
+    assert.match(lab.lines.at(-1), new RegExp(`step=sign-in-redirect .* result=${outcome === 'refused' ? 'stopped' : 'unclear'} `), code);
+    assert.match(rows(r, 'person')[0].message, outcome === 'refused' ? /issuer decided no/ : /not a decision about this person or agent/);
+  }
+});
+
+test("the lab's own stops while reading the Company each leave a row and a stdout line, tagged as the lab's own check", async () => {
+  const run = async (cfg, extra, step) => {
+    const lab = await boot({ cfg, extra });
+    const res = await lab.step1();
+    const r = (await lab.rec()).record;
+    assert.deepEqual(assertRunObservability(r), []);
+    const row = rows(r, 'person').at(-1);
+    assert.match(row.message, /^The lab's own check stopped this run/, step);
+    assert.ok(lab.lines.some((l) => new RegExp(`step=${step} layer=person actor=lab result=stopped`).test(l)), step);
+    return { res, row };
+  };
+  // The issuer typed is not the one the Company publishes (a security check): blocked.
+  const mismatch = await boot();
+  const wrong = await mismatch.call('POST', '/api/discover', { origin: CO, issuer: 'https://other.example' });
+  assert.equal(wrong.body.error, 'issuer_mismatch');
+  const mr = (await mismatch.rec()).record;
+  assert.equal(rows(mr, 'person').at(-1).outcome, 'blocked');
+  assert.ok(mismatch.lines.some((l) => /step=issuer-check layer=person actor=lab result=stopped/.test(l)));
+  // The issuer's metadata points at another origin (a security check): blocked.
+  const origin = await run({ metaOverride: { token_endpoint: 'https://elsewhere.example/token' } }, {}, 'endpoint-check');
+  assert.equal(origin.res.body.error, 'endpoint_origin');
+  assert.equal(origin.row.outcome, 'blocked');
+  // Not a decision of a security control: configuration or an unreadable document, information.
+  const meta = await run({ metaStatus: 404 }, {}, 'issuer-metadata');
+  assert.equal(meta.res.body.error, 'issuer_metadata');
+  assert.equal(meta.row.outcome, 'info');
+  const noEndpoints = await run({ metaOverride: { token_endpoint: undefined } }, {}, 'issuer-metadata');
+  assert.equal(noEndpoints.res.body.error, 'issuer_metadata');
+  const saved = process.env.PAT_DEMO_P1_ISSUER;
+  process.env.PAT_DEMO_P1_ISSUER = ISS;
+  try {
+    const missing = await run({}, { registered: null }, 'client-check');
+    assert.equal(missing.res.body.error, 'registered_client_missing');
+    assert.equal(missing.row.outcome, 'info');
+  } finally { if (saved === undefined) delete process.env.PAT_DEMO_P1_ISSUER; else process.env.PAT_DEMO_P1_ISSUER = saved; }
+});
+
+test('a Company whose documents answer 404 is part of the run, not "no run yet": an information row, and the run is readable', async () => {
+  const lab = await boot({ cfg: { docsStatus: 404 } });
+  assert.equal((await lab.step1()).status, 400);
+  const res = await lab.rec();
+  assert.ok(res.record, 'a record exists right after the person read the Company');
+  assert.deepEqual(assertRunObservability(res.record), []);
+  const resource = rows(res.record, 'resource');
+  assert.deepEqual(resource.map((x) => `${x.outcome}|${x.origin}`), ['info|response']);
+  assert.match(resource[0].message, /documents could not be used \(http\)/);
+  assert.equal(res.record.coverage.person, 'not-logged');
+  assert.match(res.record.reasons.person, /before any issuer was known/);
+  assert.match(lab.lines.at(-1), /step=read-company layer=resource actor=company result=unclear/);
+});
+
+test('a fetch that throws leaves a no-reply information row and a no-reply stdout line: the Company documents, the pushed request, the call', async () => {
+  const docs = await boot({ cfg: { docsThrow: true } });
+  assert.equal((await docs.step1()).status, 502);
+  const d = (await docs.rec()).record;
+  assert.deepEqual(rows(d, 'resource').map((x) => x.outcome), ['info']);
+  assert.match(rows(d, 'resource')[0].message, /did not answer/);
+  assert.match(docs.lines.at(-1), /step=read-company .* result=no-reply/);
+  const par = await boot({ cfg: { parThrow: true } });
+  await par.step1();
+  assert.equal((await par.step2()).status, 502);
+  const p = (await par.rec()).record;
+  assert.deepEqual(rows(p, 'agent').map((x) => x.outcome), ['info']);
+  assert.match(par.lines.at(-1), /step=push-request .* result=no-reply/);
+  const call = await boot({ cfg: { callThrow: true } });
+  await call.signedIn();
+  assert.equal((await call.step3()).status, 502);
+  const c = (await call.rec()).record;
+  assert.deepEqual(rows(c, 'resource').map((x) => x.outcome), ['info', 'info']);
+  assert.match(call.lines.at(-1), /step=call-company .* result=no-reply/);
+  assert.deepEqual(assertRunObservability(c), []);
+  // A call that did not complete is not the verdict: the run is still open, so the next call joins it.
+  const again = await call.step3();
+  assert.equal(again.status, 502);
+  assert.equal(rows((await call.rec()).record, 'resource').length, 3);
+});
+
+test('the read-company row words the checks truthfully, also at 0 passed, and stays information', async () => {
+  const lab = await boot({ cfg: { badVersion: true } });
+  await lab.step1();
+  const row = rows((await lab.rec()).record, 'resource')[0];
+  assert.equal(row.outcome, 'info');
+  assert.match(row.message, /served both of its documents\. The lab's checks on them: \d of 6 passed \(the page lists which did not\)/);
+  assert.ok(!/answered with its documents; 0 of/.test(row.message));
+});
+
+test('a new sign-in after a finished run begins a new run: sign in again, call again, and the record is that run only', async () => {
+  const lab = await boot();
+  await lab.signedIn();
+  assert.equal((await lab.step3()).status, 200);
+  assert.equal((await lab.rec()).record.rows.filter((x) => x.origin === 'response').length, 4);
+  // The access token ran out: the person signs in again (step 2), and calls (step 3).
+  await lab.step2();
+  await lab.back({ code: 'C2', state: lab.stateOf(), iss: ISS });
+  assert.equal((await lab.step3()).status, 200);
+  const r = (await lab.rec()).record;
+  assert.deepEqual(assertRunObservability(r), []);
+  assert.deepEqual(r.rows.filter((x) => x.origin === 'response').map((x) => `${x.layer}|${x.outcome}`).sort(), ['agent|allowed', 'person|allowed', 'resource|allowed'], 'run 2: the pushed request, the code exchange and the call, with no documents row');
+  // A second call after that verdict is still outside any run.
+  assert.equal((await lab.step3()).status, 200);
+  assert.equal((await lab.rec()).record.rows.filter((x) => x.origin === 'response').length, 3);
+});
+
+test('the person\'s sub is never declared as correlation: a short sub (8 characters) is absent from the record', async () => {
+  const lab = await boot({ cfg: { claims: { client_id: `${BASE}/client.json`, scope: 'accounts:read', sub: 'demouser' } } });
+  await lab.signedIn(); await lab.step3();
+  const res = await lab.call('GET', '/api/run-observability');
+  assert.ok(!res.text.includes('demouser'));
+  assert.deepEqual(assertRunObservability(res.body.record), []);
+});
+
+test('reading a finished run twice searches the same window: its last event plus a fixed grace', async () => {
+  const es = await fakeEs({ lines: [] });
+  const lab = await boot({ extra: { runObsReaders: [new ElasticsearchReader({ url: es.url, apiKey: ESKEY })] } });
+  await lab.signedIn(); await lab.step3();
+  const a = (await lab.rec()).record;
+  await new Promise((r) => setTimeout(r, 40));
+  const b = (await lab.rec()).record;
+  assert.deepEqual(a.window, b.window);
+  const last = Math.max(...a.rows.filter((x) => x.at).map((x) => Date.parse(x.at)));
+  assert.equal(Date.parse(a.window.to) - last, GRACE_MS);
+  const ranges = es.seen.bodies.map((x) => JSON.stringify(x.query.bool.filter[0]));
+  assert.ok(ranges.length >= 2);
+  assert.equal(new Set(ranges).size, 1, 'every search of a finished run sent the same window');
 });
 
 test('one run per record: a new read starts a new run, a late reply of the old one and calls after the verdict join nothing', async () => {
@@ -304,12 +452,12 @@ test('Real with a PingOne (registered) client: the issuer log is not read, and t
 test('buildRealRecord with an inline fake reader: a logged row is only what the reader returned; a reader that returns nothing leaves not-logged', async () => {
   const events = [{ at: '2026-11-22T10:00:00.000Z', layer: 'resource', outcome: 'info', product: 'Company reply', message: 'The Company answered with its documents.' }];
   const silent = { name: 'fake', canRead: () => true, readLines: async () => ({ lines: [] }) };
-  const r = await buildRealRecord({ events, registered: false, readers: [silent], clock: () => Date.parse('2026-11-22T10:00:05.000Z') });
+  const r = await buildRealRecord({ events, kind: 'cimd', readers: [silent], clock: () => Date.parse('2026-11-22T10:00:05.000Z') });
   assert.deepEqual(assertRunObservability(r), []);
   assert.equal(r.coverage.person, 'not-logged');
   assert.ok(!r.rows.some((x) => x.origin === 'logged'));
   const loud = { name: 'fake', canRead: () => true, readLines: async () => ({ lines: [{ product: 'pingfederate', at: Date.parse('2026-11-22T10:00:02.000Z'), atExact: '2026-11-22T10:00:02.000Z', message: AUDIT('person-1') }] }) };
-  const l = await buildRealRecord({ events, registered: false, readers: [loud], clock: () => Date.parse('2026-11-22T10:00:05.000Z') });
+  const l = await buildRealRecord({ events, kind: 'cimd', readers: [loud], clock: () => Date.parse('2026-11-22T10:00:05.000Z') });
   assert.deepEqual(assertRunObservability(l), []);
   assert.equal(l.coverage.person, 'logged');
   assert.deepEqual(l.rows.filter((x) => x.origin === 'logged').map((x) => x.layer), ['person']);
@@ -318,11 +466,11 @@ test('buildRealRecord with an inline fake reader: a logged row is only what the 
 test('a record built with declared ids in the detail is not marked truncated, and declared ids are shortened', async () => {
   const events = [{ at: '2026-11-22T10:00:00.000Z', layer: 'resource', outcome: 'info', product: 'Company reply', message: 'Reply for user-with-a-long-name.', detail: { sub: 'user-with-a-long-name', client: 'https://agent.example/client.json' } }];
   const silent = { name: 'fake', canRead: () => true, readLines: async () => ({ lines: [] }) };
-  const r = await buildRealRecord({ events, registered: false, who: { sub: 'user-with-a-long-name', actor: 'https://agent.example/client.json', traceId: '0af7651916cd43dd8448eb211c80319c' }, readers: [silent], clock: () => Date.parse('2026-11-22T10:00:05.000Z') });
+  const r = await buildRealRecord({ events, kind: 'cimd', who: { actor: 'https://agent.example/client.json', traceId: '0af7651916cd43dd8448eb211c80319c' }, readers: [silent], clock: () => Date.parse('2026-11-22T10:00:05.000Z') });
   assert.deepEqual(assertRunObservability(r), []);
   assert.equal(r.truncated, false);
-  assert.ok(!JSON.stringify(r.rows).includes('user-with-a-long-name'), 'a declared id is shortened to its first 4 and last 2 characters');
-  assert.match(JSON.stringify(r.rows), /user…me/);
+  assert.ok(!JSON.stringify(r.rows).includes('https://agent.example/client.json'), 'a declared id is shortened to its first 4 and last 2 characters');
+  assert.match(JSON.stringify(r.rows), /http…on/);
 });
 
 // ---- The lab's own stdout lines -------------------------------------------------------------------------------------------------------

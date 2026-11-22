@@ -61,6 +61,37 @@ describe("RunObs", () => {
     expect(reads()).toBe(base + 1);
   });
 
+  it("a Re-read press (or a Reset) while the late re-read is pending does not cancel it: the timer is armed again for a full wait", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    answer = () => json({ record: realRecord });
+    const { rerender } = render(<RunObs mode="real" tick={0} reset={0} />);
+    await act(async () => { await Promise.resolve(); });
+    rerender(<RunObs mode="real" tick={1} reset={0} />);
+    await act(async () => { await Promise.resolve(); });
+    await act(async () => { vi.advanceTimersByTime(3000); });
+    const beforePress = reads();
+    fireEvent.click(screen.getByTestId("ro-reread"));
+    await act(async () => { await Promise.resolve(); });
+    expect(reads()).toBe(beforePress + 1);
+    await act(async () => { vi.advanceTimersByTime(REREAD_MS - 1000); });
+    expect(reads()).toBe(beforePress + 1);
+    await act(async () => { vi.advanceTimersByTime(1500); });
+    expect(reads()).toBe(beforePress + 2);
+    await act(async () => { vi.advanceTimersByTime(60000); });
+    expect(reads()).toBe(beforePress + 2);
+  });
+
+  it("while a reload is pending the route's message stays; Collecting replaces it only before the first answer", async () => {
+    answer = () => json({ record: null, message: "No run yet in this workspace: read a Company (step 1) to start one." });
+    render(<RunObs mode="real" tick={0} reset={0} />);
+    await waitFor(() => expect(screen.getByTestId("ro-none")).toBeInTheDocument());
+    answer = () => new Promise(() => {});
+    fireEvent.click(screen.getByTestId("ro-reread"));
+    await waitFor(() => expect(screen.getByTestId("ro-reread")).toBeDisabled());
+    expect(screen.getByTestId("ro-none").textContent).toMatch(/No run yet/);
+    expect(screen.queryByTestId("ro-loading")).toBeNull();
+  });
+
   it("a mode switch is not a step: no late re-read, and the other mode's record is never shown", async () => {
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
     const { rerender } = render(<RunObs mode="mock" tick={3} reset={0} />);

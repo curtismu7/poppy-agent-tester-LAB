@@ -7,8 +7,8 @@
 //   Real: each reply the lab RECEIVED is one `response` row (never `logged`), stamped when it arrived. `logged` rows come only from the
 //         products' own logs, read from Elasticsearch with a read-only key; the lab's own stdout lines below are not read back.
 //
-// A run starts when the Company's documents have been read (step 1) and ends at its first Company call; events outside a run are logged
-// to stdout and kept in no record. Wording of the lines: `result=passed|stopped|unclear|no-reply` and none of the words the shared
+// A run starts when the Company is read (step 1, before its documents can fail to arrive), or at a sign-in once the last run has ended, and
+// ends at its first Company call; events outside a run are logged to stdout and kept in no record. Wording of the lines: `result=passed|stopped|unclear|no-reply` and none of the words the shared
 // matchers read as a decision (refused, denied, invalid, failed, token, audience, scope, served ...); a test runs every line through classify().
 import { createRunObservability } from './runObservability.js';
 import { readersFromEnv } from './runObservabilityReaders.js';
@@ -17,7 +17,8 @@ export const MAX_EVENTS = 100;
 const SERVICE = 'poppy-agent-tester';
 // A value that goes INTO a stdout line: only safe characters survive, so a value cannot add a fake key=value pair, a quote or a newline.
 export const lineValue = (v, n = 60) => String(v ?? '').replace(/[^A-Za-z0-9._:/@-]+/g, '_').slice(0, n) || 'unknown';
-const RESULT = { allowed: 'passed', refused: 'stopped', info: 'unclear' };
+const RESULT = { allowed: 'passed', refused: 'stopped', blocked: 'stopped', info: 'unclear' };
+export const GRACE_MS = 30_000; // how long after its last event a run's log window stays open
 
 // One timestamped line per step: who decided and the outcome, never a token or an id.
 export const decisionLine = (e) => `${e.at} ${SERVICE} step=${lineValue(e.step)} layer=${lineValue(e.layer, 12)} actor=${lineValue(e.actor, 24)} result=${e.result || RESULT[e.outcome]} mode=${lineValue(e.source, 8)}`;
@@ -25,7 +26,8 @@ export const decisionLine = (e) => `${e.at} ${SERVICE} step=${lineValue(e.step)}
 // Per workspace: the events of the runs still held, the run being filled (`open`), the run whose sign-in produced the token (`tokenRun`)
 // the client (id and kind) the run signs in as, and the trace id of its Company call.
 export const freshObs = () => ({ events: [], n: 0, open: null, tokenRun: null, client: null, traceId: null });
-export function startRun(obs, client) { obs.n += 1; obs.open = `r${obs.n}`; obs.client = client; obs.traceId = null; return obs.open; }
+// `client` is unknown until the Company's documents are read (and stays null if they never arrive).
+export function startRun(obs, client = null) { obs.n += 1; obs.open = `r${obs.n}`; obs.client = client; obs.traceId = null; return obs.open; }
 export const runNumber = (id) => Number(String(id ?? '').slice(1)) || 0;
 const latestRun = (obs) => Math.max(0, ...obs.events.map((e) => runNumber(e.runId)));
 
@@ -45,6 +47,11 @@ export function addEvent(obs, e, max = MAX_EVENTS) {
 
 // The current run: the events of the newest run still held. [] before any run.
 export const currentRun = (obs) => obs.events.filter((e) => runNumber(e.runId) === latestRun(obs));
+
+// An issuer's error redirect (RFC 6749 4.1.2.1): only these say the issuer decided no. server_error, temporarily_unavailable,
+// invalid_request, unsupported_response_type and anything unknown mean it could not or would not process the request: information.
+export const REFUSAL_CODES = ['access_denied', 'unauthorized_client', 'invalid_scope'];
+export const redirectErrorOutcome = (code) => (REFUSAL_CODES.includes(code) ? 'refused' : 'info');
 
 // A reply the lab received, as an outcome. OAuth endpoints (PAR, token) refuse with 400/401/403; the Company refuses with 401/403.
 // Anything else, or a 2xx without a usable body, is information, never a permit.
@@ -79,9 +86,12 @@ export async function buildMockRecord({ events, clock = Date.now }) {
 
 // Real: the current run's replies as `response` rows, plus whatever the products' own logs hold. A PingFederate sign-in is read from its
 // log (CIMD client); a PingOne sign-in (a registered client) has no reader yet, so it says so.
-export async function buildRealRecord({ events, registered, who = {}, readers = readersFromEnv(), clock = Date.now }) {
-  const issuerLog = registered ? [] : ['pingfederate'];
-  const noReader = !registered ? undefined : 'PingOne sign-in events are in the PingOne audit activity API, which this panel does not read yet. The reply the lab received is shown as a response row, never as logged.';
+// `kind` is the client the run signs in as: 'cimd' (PingFederate), 'registered' (PingOne) or null (the Company's documents never arrived,
+// so no issuer is known and no issuer log is read).
+export async function buildRealRecord({ events, kind = null, who = {}, readers = readersFromEnv(), clock = Date.now }) {
+  const issuerLog = kind === 'cimd' ? ['pingfederate'] : [];
+  const noReader = kind === 'registered' ? 'PingOne sign-in events are in the PingOne audit activity API, which this panel does not read yet. The reply the lab received is shown as a response row, never as logged.'
+    : kind === null ? 'This run stopped before any issuer was known, so no issuer log is read for it.' : undefined;
   const layers = [
     { layer: 'person', products: issuerLog, responses: pick(events, 'person'), reason: noReader },
     { layer: 'agent', products: issuerLog, responses: pick(events, 'agent'), reason: noReader },
@@ -91,7 +101,9 @@ export async function buildRealRecord({ events, registered, who = {}, readers = 
     { layer: 'resource', products: [], responses: pick(events, 'resource'), reason: 'The Company is whichever server the visitor typed, so this lab does not know where its log lives and reads none. The reply the lab received is shown as a response row when there is one.' },
   ];
   return createRunObservability({ readers, clock }).collectRun({
-    runId: `poppy-${Date.parse(events[0].at)}`, startedAt: events[0].at, endedAt: new Date(clock()).toISOString(),
-    correlation: { sub: who.sub, actClientId: who.actor, traceId: who.traceId }, layers, source: 'real',
+    // The window ends a fixed grace after the run's last event, so reading a finished run twice searches the same window. The person's
+    // sub is not declared as correlation: it is personal information and the core would keep a short one whole.
+    runId: `poppy-${Date.parse(events[0].at)}`, startedAt: events[0].at, endedAt: new Date(Date.parse(events.at(-1).at) + GRACE_MS).toISOString(),
+    correlation: { actClientId: who.actor, traceId: who.traceId }, layers, source: 'real',
   });
 }

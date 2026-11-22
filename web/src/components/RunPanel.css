@@ -65,3 +65,6 @@
 .pager__dot::after { content: ""; display: block; width: 9px; height: 9px; margin: auto; border-radius: 50%; background: var(--border); }
 .pager__dot[aria-current="page"]::after { background: var(--accent); }
 @media (max-width: 600px) { .pager { flex-wrap: wrap; } }
+
+/* Rule 27: the shared run-observability panel and the note under it (tokens only). */
+.rp-obs { margin-top: 12px; display: grid; gap: 8px; }

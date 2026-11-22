@@ -6,6 +6,10 @@ import { signDelegation, signSession } from './poppy.js';
 import { clientAssertion } from './oauth.js';
 
 let cached = null;
+// What the example run's builder really did, in the order it did it, each stamped when it ran (rule 27, Mock). Only the three signings:
+// the example holds no sign-in, no issuer reply and no Company reply, because none of them exists.
+const events = [];
+export const sampleEvents = () => events.map((e) => ({ ...e }));
 export function buildSample() {
   if (cached) return cached;
   const CO = 'https://company.example'; const ISSUER = 'https://pf.example:9031'; const CLIENT = 'https://agent.example/client.json';
@@ -13,9 +17,13 @@ export function buildSample() {
   const now = Math.floor(Date.now() / 1000);
   const claims = { scope: 'accounts:read', client_id: CLIENT, iss: ISSUER, aud: 'enduser.example', iat: now, exp: now + 3600, sub: 'example-person', jti: crypto.randomBytes(12).toString('base64url') };
   const token = `${b64url(JSON.stringify({ alg: 'RS256', typ: 'JWT', kid: 'example-key' }))}.${b64url(JSON.stringify(claims))}.EXAMPLE-SIGNATURE-NOT-REAL`;
+  const note = (step, message) => events.push({ at: new Date().toISOString(), source: 'mock', step, layer: 'agent', actor: 'agent', outcome: 'info', product: 'lab mock agent', message });
   const delegation = signDelegation({ clientId: CLIENT, kid, signingKey: agent.privateKey, delegatedPublicJwk: delegated.publicJwk, now });
+  note('example-delegation', 'The mock agent signed a delegation that names its delegated key. The signature is real; the keys are throwaway.');
   const session = signSession({ delegation, delegatedKey: delegated, clientId: CLIENT, issuer: ISSUER, sid: 'sid-example', sub: 'usr-EXAMPLE-random-per-company', method: 'GET', url: `${CO}/poppy/api/v1/me`, accessToken: token, now });
+  note('example-session', 'The mock agent signed a Poppy-Session for the example call with its delegated key. No Company received it.');
   const assertion = clientAssertion({ clientId: CLIENT, issuer: ISSUER, kid, signingKey: agent.privateKey, now });
+  note('example-agent-auth', 'The mock agent signed its client authentication for the example sign-in. No issuer received it.');
 
   const run = {
     example: true,

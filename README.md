@@ -121,6 +121,55 @@ The **Agent chat** tab is a guided script by default: chips run the real steps a
 
 Sign-in needs a PingFederate CIMD policy for this agent and the app reachable over https: see [docs/setup.md](docs/setup.md). Docker (OrbStack): `HOST_PORT=5450 docker compose up --build -d`.
 
+## What a run leaves behind: observability (rule 27)
+
+Under the calls on the Start flow tab the page shows **"What each layer logged for this run"** (the shared panel, vendored byte for byte in
+`web/src/run-observability/`, the core `server/src/runObservability.js`, the log readers `server/src/runObservabilityReaders.js` and
+`scripts/run-observability-checkPin.mjs`, pinned by `run-observability.sha256`; the pin test calls `checkPin`): person, agent, Authorize,
+Privilege, agent gateway and resource server, in time order, each row with its time and an honest tag. `GET /api/run-observability` builds it
+for the current run in the current mode (`{record}`, `{record: null, message}` before a run, `{error, message}` JSON on a failure).
+
+- **Mock** (the hosted form): the lab runs no flow, so the only events are the three signings its example run really did (the delegation,
+  the Poppy-Session and the client authentication), all in the agent layer, all `simulated` and all information. Person and Resource server read
+  `not logged`: no sign-in and no Company exists in Mock, and the example's access token and Company reply are invented values, so no event is made up for them.
+- **Real**: every reply the lab received is one `response` row, never `logged`: the Company's documents (resource, information), the issuer's answer to
+  the pushed sign-in request (agent), the sign-in redirect and the code exchange (person), and the Company's answer to the signed call (resource).
+  Only an OAuth reply that says no (400, 401, 403) or a Company 401 or 403 is `refused`; a usable 2xx is `allowed`; anything else, and a redirect the
+  lab itself stopped (RFC 9207 issuer check), is `info`, which is never counted as a pass. `logged` rows come only from the products' own logs, read from
+  Elasticsearch with a read-only key: PingFederate's lines for a CIMD sign-in (a registered PingOne client has no reader yet, and the panel says so).
+- **One run per record**: a run starts when the Company's documents have been read (step 1) and ends at its first Company call. A late reply from an
+  earlier sign-in, or a second call after the verdict, is logged to stdout but joins no record.
+- **Row times are when the lab computed or received the event**, the same instant as its stdout line (Mock: when the example run was built, once per process).
+  A logged row carries the product's own timestamp.
+- **Real, late lines**: a collector ships lines with a delay, so a step just run can read `not logged` at first. In Real the page shows a **Re-read logs**
+  button and reads once more about 5 seconds after each step, also after a failed one (Mock needs neither). If the Elasticsearch search was cut at its cap
+  (500 documents) and found nothing for a layer, the chip reads **Not found (partial search)** and the reason says absence is not proof.
+- **The lab's own log**: each step this lab's server takes is one stdout line, `<time> poppy-agent-tester step=<step> layer=<layer> actor=<who> result=<passed|stopped|unclear|no-reply> mode=<mock|real>`,
+  never a token or an id; every value is reduced to safe characters so it cannot add a fake `key=value` pair or a second line. The lines avoid the words the shared
+  matchers read as a decision (refused, denied, invalid, failed, token, audience, scope, served ...), and a test proves no shared matcher reads one. The page does not read them back.
+- **What each lane holds here** (the panel's lane names are fixed): Person is the issuer's sign-in reply; Agent is the personal agent (its own signing in Mock, the issuer's
+  answer to its pushed request in Real; no on-behalf-of exchange happens here); Resource server is the Company, a Poppy server rather than an MCP server.
+
+Where the logs live and where they can stream:
+
+| Product | Lives in | Streams to |
+|---|---|---|
+| This lab (server) | container stdout, one line per step | a collector to `demo-logs-<service>`, then a SIEM |
+| PingFederate | container stdout (the image tails `audit.log` and `server.log`) | the collector to `ping-logs-pingfederate`, then a SIEM |
+| PingOne (sign-in) | the PingOne audit activity API (SaaS) | not shipped by this lab |
+| The Company you typed | wherever that server writes its log (the lab does not know) | not read by this lab |
+
+**Not logged today (the panel says so, it never claims a line):** PingOne Authorize and Privilege (this lab does not call them; Authorize has no container
+log); the agent gateway (this lab calls none: the agent calls the Company directly); PingFederate's `audit.log` (not shipped to stdout today, so a sign-in line is
+usually absent); PingOne sign-in events (they need the PingOne audit reader, which does not exist yet); the Company's own log (not read). **UNVERIFIED:** whether
+a PingFederate CIMD client sign-in leaves an `audit.log` line in the shape the shared matcher reads; the panel reports what the reader finds and nothing else.
+
+Environment (both empty by default, in `.env.example` and passed through `docker-compose.yml`): `RUN_OBS_ES_URL` (a loopback Elasticsearch origin; inside
+the container loopback is the container, so use a forwarder in its network namespace) and `RUN_OBS_ES_READ_APIKEY` (a read-only key; never returned, logged or
+put in an error). Unset, the log layers say `unreachable` and what to set; the lab keeps working. The compose file does **not** mount the Docker socket;
+the Docker reader (`RUN_OBS_DOCKER=1`) is for a throwaway ad-hoc override only. The "outbound only to the hosts you type" claim has one named exception: the
+vendored shared Elasticsearch reader, which reads that loopback URL with its own fetch, in Real mode only and never in Mock.
+
 ## Presenting
 
 Press `P` for presenter mode; the simulation banner stays. The talk track is in [docs/talk-track.md](docs/talk-track.md). Brand it with `customer.config.json` (see the example) or the vertical picker.

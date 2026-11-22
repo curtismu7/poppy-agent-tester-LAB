@@ -5,6 +5,7 @@ import Pager from "./run/Pager";
 import IntroPage from "./run/IntroPage";
 import CallsPage from "./run/CallsPage";
 import TokenPage from "./run/TokenPage";
+import RunObs from "./RunObs";
 
 const ERR = { issuer_mismatch: "The issuer you typed is not the one the Company publishes.", hosted_simulation: "This hosted build explains and shows an example run; run the standalone to reach a real Company.", agent_not_configured: "Set PAT_AGENT_BASE_URL (an https URL the authorization server can reach; for a PingOne registered client http://127.0.0.1:5450 also works), then restart.", discover_first: "Read the Company first.", sign_in_first: "Sign in first." };
 // A server message that names the real values (the issuer the Company publishes, the host that failed) beats a generic one.
@@ -47,7 +48,9 @@ export default function RunPanel({ info, resetSignal }) {
   // The radio pair preselects an issuer the deployment configured; the typed value stays editable.
   const pickAs = (which) => { setAs(which); const v = which === "p1" ? info?.defaults?.p1Issuer : info?.defaults?.issuer; if (v) setIssuer(v); };
 
-  const run = async (name, fn) => { setBusy(name); setMsg(""); try { await fn(); } finally { setBusy(""); await refresh(); } };
+  // Each step, also a failed one, asks the run-observability panel to read again (RunObs waits ~5 s in Real for the collector).
+  const [obsTick, setObsTick] = useState(0);
+  const run = async (name, fn) => { setBusy(name); setMsg(""); try { await fn(); } finally { setBusy(""); setObsTick((n) => n + 1); await refresh(); } };
   const discover = () => run("discover", async () => {
     setMismatch(null);
     const r = await postJson("/api/discover", { origin, issuer });
@@ -111,7 +114,7 @@ export default function RunPanel({ info, resetSignal }) {
   return (
     <div className="rp">
       {page === 1 && <IntroPage />}
-      {page === 2 && <CallsPage ui={notices} c={ctx} />}
+      {page === 2 && <><CallsPage ui={notices} c={ctx} /><RunObs mode={info?.source} tick={obsTick} reset={resetSignal} /></>}
       {page === 3 && <TokenPage state={state} />}
       <Pager page={page} pages={PAGES} plainNext={page === 2} onPage={(n) => { setPage(n); window.scrollTo?.({ top: 0 }); }} />
     </div>

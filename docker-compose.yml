@@ -33,6 +33,10 @@ services:
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       PAT_CHAT_MODEL: ${PAT_CHAT_MODEL:-}
       NODE_EXTRA_CA_CERTS: /data/ca.pem
+      # Run observability (rule 27), Real mode only. A loopback Elasticsearch URL and a READ-ONLY key; empty = the Real record says
+      # "unreachable" and names what to set. Never mount the Docker socket here.
+      RUN_OBS_ES_URL: ${RUN_OBS_ES_URL:-}
+      RUN_OBS_ES_READ_APIKEY: ${RUN_OBS_ES_READ_APIKEY:-}
     # company-shim answers the Company origin on 127.0.0.1:3001 inside this container's network. Set PAT_DEMO_COMPANY_HOST to the host name
     # of PAT_DEMO_COMPANY_ORIGIN (default localhost) so that name resolves to the shim and not to a public address.
     extra_hosts:

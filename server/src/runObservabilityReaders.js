@@ -239,8 +239,8 @@ export class ElasticsearchReader {
 // product=container,product=container  ->  { product: container }
 const pairs = (text) => nullMap(Object.fromEntries(String(text || '').split(',').map((p) => p.trim().split('=')).filter((p) => p.length === 2 && safeName(p[0].trim()) && p[1].trim()).map(([k, v]) => [k.trim(), v.trim()])));
 
-// The readers, in selection order, from the environment (owner decision 2026-11-22): Elasticsearch is the DEFAULT reader (the collector in
-// shared/ping-log-collector is the only thing that holds the Docker socket and ships to it; a lab reads Elasticsearch with a read key).
+// The readers, in selection order, from the environment (owner decision 2026-11-22): Elasticsearch is the DEFAULT reader (the log collector
+// is the only thing that holds the Docker socket and ships to it; a lab reads Elasticsearch with a read key).
 // The Docker reader is opt-in: it needs RUN_OBS_DOCKER=1 AND RUN_OBS_CONTAINERS / RUN_OBS_LOG_FILES, because it means mounting the Docker
 // socket into the lab (even read-only it exposes the whole Docker API), which breaks the loopback-only, non-root, read-only-fs rules.
 // Use it for an ad-hoc run or a video capture only.

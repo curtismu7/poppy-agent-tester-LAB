@@ -36,7 +36,7 @@ test('no shipped text names a real customer, company or tenant', () => {
       if (skip.has(name)) continue;
       const p = path.join(dir, name);
       if (fs.statSync(p).isDirectory()) walk(p);
-      else if (!['repo.test.mjs', 'story.test.js', 'content-pack.test.mjs', 'standalone-ui.css', '.pdf', 'FloatingDialog.jsx', 'floating-dialog.css', 'floating-dialog.test.jsx', 'geometry.js', 'useFloatingPanel.js', 'TalkTrackDialog.jsx', 'runObservability.js'].some((n) => p.endsWith(n))) { // the shared floating-dialog mentions its origin in comments by design; pinned by sha; so is the vendored run-observability core (its comments cite the repos the log shapes were measured in)
+      else if (!['repo.test.mjs', 'story.test.js', 'content-pack.test.mjs', 'standalone-ui.css', '.pdf', 'FloatingDialog.jsx', 'floating-dialog.css', 'floating-dialog.test.jsx', 'geometry.js', 'useFloatingPanel.js', 'TalkTrackDialog.jsx'].some((n) => p.endsWith(n))) { // the shared floating-dialog mentions its origin in comments by design; pinned by sha
         const t = fs.readFileSync(p, 'utf8').toLowerCase();
         for (const w of ['united airlines', 'mileageplus', 'datapower', 'optum', 'unitedhealth', 'uhg', 'member benefit', 'ai-demo2', 'gateway-claims', 'gclab', 'v1.2610']) if (t.includes(w)) hits.push(`${path.relative(root, p)}: ${w}`);
       }

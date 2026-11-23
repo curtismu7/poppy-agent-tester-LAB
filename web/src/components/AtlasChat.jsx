@@ -98,6 +98,36 @@ function StepRow({ step, onOpen, open }) {
 }
 
 export default function AtlasChat({ info, resetSignal }) {
+  // Drag the divider to resize the chat panel; the width persists.
+  const onHandleDown = useCallback((e) => {
+    e.preventDefault();
+    const grid = e.target.closest(".atlas");
+    if (!grid) return;
+    const rect = grid.getBoundingClientRect();
+    const move = (ev) => {
+      ev.preventDefault();
+      const w = Math.min(Math.max(ev.clientX - rect.left, 240), rect.width * 0.5);
+      grid.style.setProperty("--phone-w", `${w}px`);
+    };
+    const up = () => {
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+      try {
+        const w = parseFloat(getComputedStyle(grid).getPropertyValue("--phone-w"));
+        if (w) localStorage.setItem("pv.chatW", String(w));
+      } catch { /* none */ }
+    };
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up, { once: true });
+  }, []);
+  useEffect(() => {
+    try {
+      const w = parseFloat(localStorage.getItem("pv.chatW"));
+      if (w) document.querySelector(".atlas")?.style.setProperty("--phone-w", `${w}px`);
+    } catch { /* none */ }
+  }, []);
   const [origin, setOrigin] = useState("");
   const [issuer, setIssuer] = useState("");
   const [state, setState] = useState(null);
@@ -249,6 +279,8 @@ export default function AtlasChat({ info, resetSignal }) {
             : <p className="muted" data-testid="atlas-hint">{info?.hosted ? "This hosted build cannot reach a Company. Run the standalone to chat with the agent." : "Type the Company origin and the authorization server issuer above; a question to ask appears here."}</p>}
         </div>
       </section>
+
+      <div className="col-handle" role="separator" aria-orientation="vertical" aria-label="Resize chat panel" onPointerDown={onHandleDown} />
 
       <section className="atlas-flow" aria-label="The protocol arrows the chat caused">
         {msg && <p className="panel" data-testid="atlas-msg">{msg}</p>}

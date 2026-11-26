@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getJson, postJson } from "../api";
 import Json, { POPPY_HOT } from "./Json";
 import PatternDiagram from "./PatternDiagram";
+import SequenceView from "./SequenceView";
 import { markEdges } from "../hooks/useDiagramStepper";
 
 const SPEC = "https://personalagentprotocol.org/docs/1.0/spec";
@@ -284,6 +285,10 @@ export default function AtlasChat({ info, resetSignal }) {
 
       <section className="atlas-flow" aria-label="The protocol arrows the chat caused">
         {msg && <p className="panel" data-testid="atlas-msg">{msg}</p>}
+        {/* The run as a lifeline sequence with a movie-reel of wire details (the HITL-demo presentation);
+            the flat step list stays above it for a quick scan. activeArrow (the chat's lit studio arrow)
+            maps to a sequence kind by the same STEP_ARROW table. */}
+        {(() => { const byArrow = { 0: "discover", 4: "authorize", 7: "token", 8: "call", 9: "call" }; return <SequenceView state={state} resetSignal={resetSignal} highlightKind={activeArrow >= 0 ? byArrow[activeArrow] : null} />; })()}
         <ol className="atlas-steps">
           {steps.length
             ? steps.map((s, i) => <StepRow key={i} step={s} open={openStep === i} onOpen={() => setOpenStep(openStep === i ? null : i)} />)

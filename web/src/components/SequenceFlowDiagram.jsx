@@ -1,0 +1,555 @@
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import {
+  BaseEdge,
+  Background,
+  BackgroundVariant,
+  Controls,
+  EdgeLabelRenderer,
+  getStraightPath,
+  Handle,
+  Position,
+  ReactFlowProvider,
+  useReactFlow,
+} from "@xyflow/react";
+import ReactFlow from "./diagram/UniqueReactFlow";
+import "@xyflow/react/dist/style.css";
+import DiagramStepBar from "./DiagramStepBar";
+import { parseSequence } from "../utils/parseSequence";
+import { markEdges, markNodes, stepEdges, useDiagramStepper } from "../hooks/useDiagramStepper";
+import { useReelSync } from "../hooks/useReelSync";
+import DiagramReel from "./DiagramReel";
+import { resolveRefs } from "../utils/specRefs";
+import { buildNodeDetail, buildReelSteps } from "../utils/diagramReel";
+import { useFitOnResize, useFitOnSource } from "../hooks/useFitOnResize";
+import "./SequenceFlowDiagram.css";
+import SequenceActorHeader from "./SequenceActorHeader";
+
+/**
+ * SequenceFlowDiagram — a sequence diagram (participants, lifelines, ordered
+ * messages) drawn with React Flow. Reads `sequenceDiagram` text (the DSL the parseSequence utility understands) so the
+ * page's .mmd export/upload keeps working. Messages are the Play/Step steps.
+ */
+
+// Column width by how many participants share a row: wide sequences get tighter columns, so fitting the
+// page width does not shrink the text. Message labels may be wider than a column; each has its own row.
+const colFor = (n) => (n <= 4 ? 270 : n <= 6 ? 225 : n <= 8 ? 185 : 155);
+const PART_H = 64;
+const TOP = 120; // room for participant boxes of 4 lines before the first row
+const LINE_H = 17;
+const FIT = { padding: 0.04 };
+const TOKEN_INDENT = 2; // decoded token claims are pretty-printed for the reel's JSON pane
+// Floor for the fitted zoom: 13px message labels stay >= 11px on screen (a little headroom for box bands).
+const MIN_ZOOM = 0.88;
+
+/**
+ * Width of the React Flow area: the canvas width, or wider (the canvas scrolls sideways) when
+ * fitView would shrink text below MIN_ZOOM. fitView zooms to width / (drawn width * (1 + padding));
+ * the drawing is bounds.w less its 60px margin on each side.
+ */
+export function flowWidth(canvasW, bounds) {
+  return Math.max(canvasW, Math.ceil((bounds.w - 120) * (1 + FIT.padding) * MIN_ZOOM));
+}
+
+function Participant({ data }) {
+  return (
+    <div className={`sfx-part${data.lane ? ` sfx-lane-${data.lane}` : ""}`} style={{ width: data.w }}>
+      {data.label.split("\n").map((l, i) => (
+        <div key={i} className={i ? "sfx-part__sub" : "sfx-part__title"}>{l}</div>
+      ))}
+    </div>
+  );
+}
+function Lifeline({ data }) {
+  return <div className="sfx-lifeline" style={{ height: data.h }} />;
+}
+function Anchor() {
+  const h = { opacity: 0, width: 1, height: 1 };
+  return (
+    <div className="sfx-anchor">
+      <Handle id="sl" type="source" position={Position.Left} style={h} />
+      <Handle id="sr" type="source" position={Position.Right} style={h} />
+      <Handle id="tl" type="target" position={Position.Left} style={h} />
+      <Handle id="tr" type="target" position={Position.Right} style={h} />
+    </div>
+  );
+}
+function Note({ data }) {
+  return <div className="sfx-note" style={{ width: data.w }}>{data.text}</div>;
+}
+// A wire form or mock token shown under its message, like the payload boxes of a hand-drawn sequence diagram.
+function Payload({ data }) {
+  return <pre className="sfx-payload" style={{ width: data.w }}>{data.text}</pre>;
+}
+// The issue overlay under a hop's first message: the problem the hop exists to solve, what it does about it, and (when
+// the design is still open) the known gap.
+function Issue({ data }) {
+  const { issue } = data;
+  return (
+    <div className="sfx-issue" style={{ width: data.w }}>
+      <div className="sfx-issue__title">{issue.title}</div>
+      <p className="sfx-issue__row"><b>Issue</b> {issue.problem}</p>
+      <p className="sfx-issue__row"><b>Answer</b> {issue.answer}</p>
+      {issue.gap && <p className="sfx-issue__row sfx-issue__row--gap"><b>Known gap</b> {issue.gap}</p>}
+    </div>
+  );
+}
+function Fragment({ data }) {
+  return <div className="sfx-frag" style={{ width: data.w }}>{data.text}</div>;
+}
+function BoxBand({ data }) {
+  return (
+    <div className="sfx-box" style={{ width: data.w, height: data.h }}>
+      <span className="sfx-box__label">{data.label}</span>
+    </div>
+  );
+}
+
+// "lucid" variant: a coloured phase band behind a run of messages, and an alt / loop frame with its [title] and else dividers.
+function Band({ data }) {
+  // The band colour is the diagram's own rect colour, handed through at run time.
+  {/* ui-pattern: allow H3 the band colour is the diagram's own rect colour, handed through at run time */}
+  return <div className="sfx-band sfx-band--painted" style={{ width: data.w, height: data.h, background: data.colour }} />;
+}
+function Frame({ data }) {
+  return (
+    <div className="sfx-frame" style={{ width: data.w, height: data.h }}>
+      <span className="sfx-frame__tag">{data.kind}</span>
+      <span className="sfx-frame__title">{data.text ? `[${data.text}]` : ""}</span>
+      {data.elses.map((e, i) => (
+        <div key={i} className="sfx-frame__else" style={{ top: e.dy }}><span className="sfx-frame__title">{e.text ? `[${e.text}]` : ""}</span></div>
+      ))}
+    </div>
+  );
+}
+// The numbered black disc at the start of a message ("lucid" variant).
+function Disc({ x, y, n }) {
+  return (
+    <g className="sfx-disc" aria-hidden="true">
+      <circle cx={x} cy={y} r="9" />
+      <text x={x} y={y + 3.5} textAnchor="middle">{n}</text>
+    </g>
+  );
+}
+// A message label that opens that message's details when the page gave it a pick handler.
+export function Label({ data, className, style }) {
+  const pick = data.onPick ? () => data.onPick(data.i) : undefined;
+  return (
+    <div
+      className={`sfx-label nodrag nopan${className ? ` ${className}` : ""}${pick ? " sfx-label--pick" : ""}`}
+      style={style}
+      {...(pick ? { role: "button", tabIndex: 0, "aria-label": `Message ${data.i + 1}: ${data.text.replace(/\n/g, " ")}. Show details`, onClick: pick, onKeyDown: (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); pick(); } } } : null)}
+    >
+      {data.text}
+    </div>
+  );
+}
+
+function MessageEdge({ id, sourceX, sourceY, targetX, targetY, style, markerStart, markerEnd, data }) {
+  const [path, labelX, labelY] = getStraightPath({ sourceX, sourceY, targetX, targetY });
+  return (
+    <>
+      <BaseEdge id={id} path={path} style={style} markerStart={markerStart} markerEnd={markerEnd} />
+      {data.disc && <Disc x={sourceX} y={sourceY} n={data.n} />}
+      <EdgeLabelRenderer>
+        <Label data={data} style={{ transform: `translate(-50%, -100%) translate(${labelX}px, ${labelY - 4}px)` }} />
+      </EdgeLabelRenderer>
+    </>
+  );
+}
+function SelfEdge({ id, sourceX, sourceY, style, markerEnd, data }) {
+  const x = sourceX + 46;
+  const path = `M ${sourceX} ${sourceY} H ${x} V ${sourceY + 26} H ${sourceX}`;
+  return (
+    <>
+      <BaseEdge id={id} path={path} style={style} markerEnd={markerEnd} />
+      {data.disc && <Disc x={sourceX} y={sourceY} n={data.n} />}
+      <EdgeLabelRenderer>
+        <Label data={data} className="sfx-label--self" style={{ transform: `translate(0, -50%) translate(${x + 8}px, ${sourceY + 13}px)` }} />
+      </EdgeLabelRenderer>
+    </>
+  );
+}
+
+const nodeTypes = { part: Participant, lifeline: Lifeline, anchor: Anchor, note: Note, payload: Payload, issue: Issue, frag: Fragment, box: BoxBand, band: Band, frame: Frame };
+const edgeTypes = { msg: MessageEdge, self: SelfEdge };
+
+const ARROW = { type: "arrowclosed", width: 16, height: 16 };
+
+// Monospace box width for a payload: the longest line, kept inside the participants' span.
+const PAYLOAD_CH = 7.8; // IBM Plex Mono at the app's size; a system mono is narrower, so it only leaves slack
+const PAYLOAD_LINE_H = 15;
+
+// Height of an issue box: its text wraps at about ISSUE_CH characters a line.
+const ISSUE_W = 600;
+const ISSUE_CH = 82;
+export function issueHeight(issue) {
+  const rows = [issue.problem, issue.answer, issue.gap].filter(Boolean);
+  const lines = rows.reduce((sum, t) => sum + Math.ceil((t.length + 10) / ISSUE_CH), 0);
+  return 18 + 24 + lines * 17 + rows.length * 6;
+}
+
+export function buildSequenceFlow(source, payloads = [], { lanes, issues, variant, onPick } = {}) {
+  const lucid = variant === "lucid"; // bands, frames and numbered discs, in the look of the reference Lucidchart sequence
+  const model = parseSequence(source, { structure: lucid });
+  // Two or more `box` groups are separate flows. Draw them stacked, each with its own
+  // participant row, instead of side by side, so the diagram stays narrow enough to read.
+  const stacked = model.boxes.length > 1;
+  const groupOf = (p) => (stacked ? p.box || "__none" : "__all");
+  const groupIds = [...new Set(model.participants.map(groupOf))];
+  const colIndex = {};
+  const perGroup = {};
+  model.participants.forEach((p) => {
+    const g = groupOf(p);
+    perGroup[g] = (perGroup[g] || 0) + 1;
+    colIndex[p.id] = perGroup[g] - 1;
+  });
+  const COL = colFor(Math.max(1, ...Object.values(perGroup)));
+  const PART_W = Math.min(220, COL - 24);
+  const cx = Object.fromEntries(model.participants.map((p) => [p.id, 60 + colIndex[p.id] * COL + PART_W / 2]));
+  const byId = Object.fromEntries(model.participants.map((p) => [p.id, p]));
+  const nodes = [];
+  const edges = [];
+  const steps = [];
+  const rows = []; // y of each message arrow, for scrolling a step into view
+  const names = Object.fromEntries(model.participants.map((p) => [p.id, p.label.split("\n")[0]]));
+  const spans = {}; // group id -> { head, end }
+  let cur = null;
+  let y = TOP;
+  let n = 0;
+  const bandStack = [];
+  const frameStack = [];
+  const allCx = model.participants.map((p) => cx[p.id]);
+  const minX = Math.min(...allCx);
+  const maxX = Math.max(...allCx);
+
+  const open = (g) => {
+    if (cur !== null) spans[cur].end = y + 20;
+    const head = cur === null ? 20 : y + 40;
+    if (cur !== null) y = head + PART_H + 6;
+    spans[g] = { head, end: 0 };
+    cur = g;
+  };
+  open(groupIds[0] ?? "__all");
+  const groupCx = (g) => model.participants.filter((p) => groupOf(p) === g).map((p) => cx[p.id]);
+
+  // Lifelines, anchors, payloads, notes, frags, boxes, bands and frames do nothing when clicked and (in the lucid
+  // variant) sit over the message labels. React Flow writes `pointer-events: all` INLINE on each node, which beats
+  // any stylesheet rule, so the click-through must be set the same way: inline style on every non-interactive node.
+  const inert = { pointerEvents: "none" };
+
+  model.items.forEach((it, i) => {
+    if (it.type === "message") {
+      const g = groupOf(byId[it.from]);
+      if (stacked && g !== cur) open(g);
+      const lines = it.text.split("\n").length;
+      y += 18 + lines * LINE_H;
+      const self = it.from === it.to;
+      const a = `a${i}s`;
+      const b = `a${i}t`;
+      const rightward = cx[it.to] >= cx[it.from];
+      nodes.push({ id: a, type: "anchor", position: { x: cx[it.from] - 3, y: y - 3 }, data: {}, draggable: false, selectable: false, zIndex: 3, style: inert });
+      nodes.push({ id: b, type: "anchor", position: { x: cx[it.to] - 3, y: y + (self ? 23 : -3) }, data: {}, draggable: false, selectable: false, zIndex: 3, style: inert });
+      n += 1;
+      const text = model.autonumber && !lucid ? `${n}. ${it.text}` : it.text;
+      const lane = lanes?.[it.from];
+      const stroke = lane ? `var(--sfx-color-${lane})` : undefined;
+      edges.push({
+        id: `m${i}`,
+        source: a,
+        target: b,
+        sourceHandle: self || rightward ? "sr" : "sl",
+        targetHandle: self ? "tr" : rightward ? "tl" : "tr",
+        type: self ? "self" : "msg",
+        markerEnd: lane ? { ...ARROW, color: stroke } : ARROW,
+        ...(it.both ? { markerStart: lane ? { ...ARROW, color: stroke } : ARROW } : null),
+        style: { ...(it.dashed ? { strokeDasharray: "6 4" } : null), ...(lane ? { stroke, strokeWidth: 3 } : null) },
+        data: { text, stroke, ...(lucid ? { disc: true, n, i: n - 1, onPick } : null) },
+        selectable: false,
+        zIndex: 2,
+      });
+      steps.push(`${names[it.from]} → ${names[it.to]}: ${it.text.replace(/\n/g, " ")}`);
+      rows.push(y);
+      if (self) y += 26;
+      const payload = payloads[n - 1];
+      if (payload) {
+        const plines = payload.split("\n");
+        const allX = model.participants.map((p) => cx[p.id]);
+        const w = Math.min(780, Math.max(220, Math.ceil(Math.max(...plines.map((l) => l.length)) * PAYLOAD_CH) + 40));
+        const left = Math.min(cx[it.from], cx[it.to]) - 12;
+        const x = Math.max(Math.min(...allX) - 80, Math.min(left, Math.max(...allX) + 80 - w));
+        const h = plines.length * PAYLOAD_LINE_H + 16;
+        y += 8;
+        nodes.push({ id: `pl${n - 1}`, type: "payload", position: { x, y }, data: { text: payload, w }, draggable: false, selectable: false, zIndex: 1, style: inert });
+        y += h + 6;
+      }
+      const issue = issues?.[n - 1];
+      if (issue) {
+        const allX = model.participants.map((p) => cx[p.id]);
+        const x = Math.max(Math.min(...allX) - 80, Math.min(Math.min(cx[it.from], cx[it.to]) - 12, Math.max(...allX) + 80 - ISSUE_W));
+        y += 8;
+        nodes.push({ id: `is${n - 1}`, type: "issue", position: { x, y }, data: { issue, w: ISSUE_W }, draggable: false, selectable: false, zIndex: 1, style: inert });
+        y += issueHeight(issue) + 6;
+      }
+    } else if (it.type === "note") {
+      const xs = it.over.map((id) => cx[id]);
+      const x0 = Math.min(...xs) - 90;
+      const w = Math.max(...xs) - Math.min(...xs) + 180;
+      // lucid: a long note wraps inside its width, so count the wrapped lines too (else it grows over the next message)
+      const lines = lucid ? Math.max(it.text.split("\n").length, ...it.text.split("\n").map((l) => Math.ceil((l.length * 6.4) / Math.max(60, w - 24)))) : it.text.split("\n").length;
+      y += 14;
+      nodes.push({ id: `n${i}`, type: "note", position: { x: x0, y }, data: { text: it.text, w }, draggable: false, selectable: false, style: inert });
+      y += lines * LINE_H + 18;
+    } else if (it.type === "rect") {
+      y += 8;
+      bandStack.push({ y, colour: it.colour });
+    } else if (it.type === "rectEnd") {
+      const b = bandStack.pop();
+      if (b) nodes.push({ id: `band${i}`, type: "band", position: { x: minX - 74, y: b.y }, data: { w: maxX - minX + 148, h: y - b.y + 8, colour: b.colour }, draggable: false, selectable: false, zIndex: -2, style: inert });
+      y += 14;
+    } else if (it.type === "fragment" && lucid && it.kind !== "else" && it.kind !== "and") {
+      y += 8;
+      frameStack.push({ kind: it.kind, text: it.text, y, elses: [] });
+      y += 28;
+    } else if (it.type === "fragment" && lucid) {
+      const f = frameStack[frameStack.length - 1];
+      y += 6;
+      if (f) f.elses.push({ dy: y - f.y, text: it.text });
+      y += 24;
+    } else if (it.type === "fragmentEnd") {
+      const f = frameStack.pop();
+      if (f) {
+        const inset = frameStack.length * 10;
+        nodes.push({ id: `frame${i}`, type: "frame", position: { x: minX - 56 + inset, y: f.y }, data: { w: maxX - minX + 112 - inset * 2, h: y - f.y + 6, kind: f.kind, text: f.text, elses: f.elses }, draggable: false, selectable: false, zIndex: -1, style: inert });
+      }
+      y += 12;
+    } else if (it.type === "fragment") {
+      const all = groupCx(cur);
+      y += 12;
+      nodes.push({
+        id: `f${i}`,
+        type: "frag",
+        position: { x: Math.min(...all) - 100, y },
+        data: { text: `${it.kind}${it.text ? ` · ${it.text}` : ""}`, w: Math.max(...all) - Math.min(...all) + 200 },
+        draggable: false,
+        selectable: false,
+        style: inert,
+      });
+      y += 18;
+    }
+  });
+  spans[cur].end = y + 30;
+
+  model.participants.forEach((p) => {
+    const span = spans[groupOf(p)] || spans[cur];
+    nodes.push({ id: `p-${p.id}`, type: "part", position: { x: cx[p.id] - PART_W / 2, y: span.head }, data: { label: p.label, w: PART_W, lane: lanes?.[p.id] }, draggable: false, zIndex: 4 });
+    nodes.push({ id: `l-${p.id}`, type: "lifeline", position: { x: cx[p.id] - 1, y: span.head + PART_H }, data: { h: Math.max(20, span.end - span.head - PART_H) }, draggable: false, selectable: false, zIndex: 0, style: inert });
+  });
+  model.boxes.forEach((b, i) => {
+    const xs = b.ids.map((id) => cx[id]);
+    if (!xs.length) return;
+    const span = stacked ? spans[groupOf(byId[b.ids[0]])] : spans[cur];
+    const top = (stacked ? span.head : 20) - 30;
+    nodes.push({
+      id: `box${i}`,
+      type: "box",
+      position: { x: Math.min(...xs) - PART_W / 2 - 14, y: top },
+      data: { label: b.label, w: Math.max(...xs) - Math.min(...xs) + PART_W + 28, h: span.end - top + 10 },
+      draggable: false,
+      selectable: false,
+      zIndex: -1,
+      style: inert,
+    });
+  });
+  // Natural size of the drawing, so the canvas can be sized to it (see Inner).
+  const widest = Math.max(1, ...Object.values(perGroup));
+  const bounds = { w: 120 + (widest - 1) * COL + PART_W, h: spans[cur].end + 40 };
+  // For the movie reel: the messages in order, and each participant as a node with its own detail lines.
+  const messages = model.items.filter((i) => i.type === "message").map((i) => [i.from, i.to, i.text]);
+  const people = model.participants.map((p) => {
+    const [head, ...rest] = p.label.split("\n");
+    return { id: p.id, label: head, sub: rest };
+  });
+  return { nodes, edges, steps, bounds, messages, people, rows };
+}
+
+function Inner({ source, label, step, active, details, driver, payloads, stepDetails, reelSync, lanes, issues, variant }) {
+  const ref = useRef(null);
+  const flowRef = useRef(null);
+  useFitOnResize(flowRef, FIT);
+  useFitOnSource(source, FIT);
+  const [canvasW, setCanvasW] = useState(0);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || typeof ResizeObserver === "undefined") return undefined;
+    const ro = new ResizeObserver(() => setCanvasW(el.clientWidth));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  const pickRef = useRef(null); // a message click goes through a ref so the built nodes and edges stay stable between renders
+  const onPick = useMemo(() => (i) => pickRef.current?.(i), []);
+  const { nodes, edges, steps, bounds, messages, people, rows } = useMemo(() => buildSequenceFlow(source, payloads, { lanes, issues, variant, onPick }), [source, payloads, lanes, issues, variant, onPick]);
+  const rf = useReactFlow();
+  // Fit to the page WIDTH and let the canvas grow to the drawing's height, so a 28-message
+  // sequence stays at a readable size instead of shrinking to fit one screen.
+  // Too narrow to fit at a readable size: keep MIN_ZOOM and scroll sideways.
+  const zoom = canvasW ? Math.max(MIN_ZOOM, Math.min(1.1, canvasW / bounds.w)) : 1;
+  const flowW = canvasW ? flowWidth(canvasW, bounds) : undefined;
+  const fitHeight = canvasW ? Math.max(520, Math.round(bounds.h * zoom) + 24) : undefined;
+  const stepper = useDiagramStepper(steps.length);
+  const external = step !== undefined || active !== undefined || driver !== undefined;
+  const reelStepper = driver || (external ? null : stepper);
+  useReelSync(reelSync, (driver || stepper).goTo, messages.length, ref);
+  const shown = useMemo(() => {
+    const stepped = active !== undefined ? markEdges(edges, active) : stepEdges(edges, driver ? driver.step : step !== undefined ? step : stepper.step);
+    // Lane colours stay on the arrows while a step is in focus: the focus shows as weight and motion, never as a hue change.
+    return lanes ? stepped.map((e) => (e.data?.stroke ? { ...e, style: { ...e.style, stroke: e.data.stroke } } : e)) : stepped;
+  }, [edges, stepper.step, step, active, driver, lanes]);
+  const reelSteps = useMemo(
+    () => {
+      if (!reelStepper) return [];
+      const built = buildReelSteps({ edges: messages, nodes: people, details });
+      // the payload shown under a message is also its request form in the reel's details row
+      return built.map((r, i) => {
+        const d = stepDetails?.[i];
+        const extra = [
+          ...(d?.what ? [{ who: "What happens", text: d.what }] : []),
+          ...(d?.why ? [{ who: "Why it matters", text: d.why }] : []),
+          ...(d?.open ? [{ who: "Open", text: d.open }] : []),
+          ...(payloads?.[i] ? [{ who: "Payload", code: payloads[i] }] : []),
+          // wire detail, when the page gives it: the request and response as the wire text, each decoded token, the repo file behind the step
+          ...(d?.request ? [{ who: "Request", code: d.request }] : []),
+          ...(d?.response ? [{ who: "Response", code: d.response }] : []),
+          ...(d?.tokens || []).map((t) => ({ who: `Token: ${t.label}`, code: JSON.stringify({ header: t.header, payload: t.payload }, null, TOKEN_INDENT) })), // shown in the reel's JsonPane (ReelCode), not in a <pre>
+          ...(d?.source ? [{ who: "In this repo", text: d.source }] : []),
+        ];
+        const refs = d?.refs?.length ? resolveRefs(d.refs) : null;
+        // lucid: the step's own detail first (each lifeline box has its own role text when clicked), so the request and response are not pushed below two paragraphs
+        const lines = variant === "lucid" && extra.length ? extra : [...r.lines, ...extra];
+        return extra.length || refs ? { ...r, lines, ...(refs?.length ? { refs } : null) } : r;
+      });
+    },
+    [reelStepper, messages, people, details, payloads, stepDetails, variant],
+  );
+  const [nodeDetail, setNodeDetail] = useState(null);
+  const [openKey, setOpenKey] = useState(0); // a message click bumps it: the reel opens the details row for that step
+  // Header strip state. Mirrors stepEdges: step < 0 leaves everything shown,
+  // otherwise edges past the focus are not reached yet. `active` (page-driven)
+  // lights just those messages.
+  const focus = driver ? driver.step : step !== undefined ? step : stepper.step;
+  const msgState = (i) => {
+    if (active !== undefined) return active.includes(i) ? "active" : "idle";
+    if (focus < 0) return "done";
+    return i === focus ? "active" : i < focus ? "done" : "idle";
+  };
+  const headerActors = people.map((p) => {
+    const states = messages.flatMap((m, i) => (m[0] === p.id || m[1] === p.id ? [msgState(i)] : []));
+    const state = states.includes("active") ? "active" : states.includes("done") ? "done" : "idle";
+    return { id: p.id, name: p.label, description: p.sub[0], state };
+  });
+  const headerSegments = messages.map((_, i) => ({ state: msgState(i) }));
+  const current = reelStepper ? reelSteps[reelStepper.step] : null;
+  const lit = useMemo(
+    () => markNodes(nodes, current ? [`p-${current.from}`, `p-${current.to}`, `pl${reelStepper.step}`] : []),
+    [nodes, current, reelStepper],
+  );
+  // A step picked on the movie reel (or reached by Simulate) scrolls its message into view; the arrow and its payload light up.
+  useEffect(() => {
+    const el = ref.current;
+    if (focus < 0 || !el || rows[focus] === undefined) return;
+    try {
+      const { y, zoom } = rf.getViewport();
+      const top = el.getBoundingClientRect().top + window.scrollY + y + rows[focus] * zoom;
+      const vh = window.innerHeight;
+      if (top < window.scrollY + 120 || top > window.scrollY + vh - 160) window.scrollTo({ top: Math.max(0, top - vh * 0.35), behavior: "smooth" });
+    } catch (_) { /* scrolling is a convenience */ }
+  }, [focus, rows, rf]);
+  pickRef.current = reelStepper
+    ? (i) => {
+        setNodeDetail(null);
+        reelStepper.goTo(i);
+        setOpenKey((k) => k + 1);
+      }
+    : null;
+  const showPart = (id) => setNodeDetail(buildNodeDetail(people.find((p) => `p-${p.id}` === id), details));
+  const onNodeClick = (_, node) => {
+    if (!reelStepper || node.type !== "part") return;
+    showPart(node.id);
+  };
+  // Only a participant box does anything (a click opens its details in the reel), so it is the one tab stop, named, and
+  // Enter / Space do what the click does. Lifelines, anchors, payloads, notes and arrows do nothing: no tab stop for them
+  // (they were unnamed, partly off screen, and showed no focus). The step buttons and the reel are the keyboard path through the arrows.
+  const stops = useMemo(
+    () => lit.map((n) => (n.type === "part" && reelStepper
+      ? {
+          ...n,
+          focusable: true,
+          domAttributes: {
+            "aria-label": `${String(n.data.label).split("\n").join(", ")}. Show details`,
+            onKeyDown: (e) => {
+              if (e.key !== "Enter" && e.key !== " ") return;
+              e.preventDefault();
+              showPart(n.id);
+            },
+          },
+        }
+      : n)),
+    // showPart reads people/details; both are stable per source
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [lit, reelStepper, people, details],
+  );
+  return (
+    <>
+      {!external && <DiagramStepBar stepper={stepper} caption={steps[stepper.step]} label={label ? `${label} controls` : undefined} />}
+      {reelStepper && (
+        <DiagramReel steps={reelSteps} stepper={reelStepper} nodeDetail={nodeDetail} onClearNode={() => setNodeDetail(null)} openKey={openKey} follow={variant === "lucid"} testId="sequence-reel" />
+      )}
+      <SequenceActorHeader actors={headerActors} segments={headerSegments} />
+      <div className="sfx-canvas" data-testid="sequence-flow-canvas" ref={ref} style={fitHeight ? { height: fitHeight } : undefined}>
+        <div className="sfx-flow" ref={flowRef} style={flowW > canvasW ? { width: flowW } : undefined}>
+        <ReactFlow
+          nodes={stops}
+          edges={shown}
+          nodesFocusable={false}
+          edgesFocusable={false}
+          onNodeClick={onNodeClick}
+          nodeTypes={nodeTypes}
+          edgeTypes={edgeTypes}
+          fitView
+          fitViewOptions={FIT}
+          minZoom={0.2}
+          maxZoom={2}
+          nodesDraggable={false}
+          nodesConnectable={false}
+          zoomOnScroll={false}
+          preventScrolling={false}
+          proOptions={{ hideAttribution: true }}
+        >
+          <Background variant={BackgroundVariant.Dots} gap={22} size={1.5} />
+          <Controls showInteractive={false} />
+        </ReactFlow>
+        </div>
+      </div>
+    </>
+  );
+}
+
+/**
+ * Leave `step` and `active` undefined for the built-in Play/Step bar. A page that drives the
+ * highlight itself passes `step` (one message in focus, later ones fade) or `active` (an
+ * array of message indexes to accent). `details` maps a participant id to the text shown in the
+ * movie reel's details row. `stepDetails` is one { what, why, open } per message, shown in the reel's details row
+ * when that step is picked. A page that runs its own simulator passes `driver` ({ step, goTo }, step =
+ * the message index) to get the diagram highlight and the movie reel without a second control bar.
+ * `variant="lucid"` draws `rect` bands, alt/loop frames and numbered discs, makes each message label open its details, and uses the
+ * reference Lucidchart colours. A step detail may also carry request, response, tokens ([{ label, header, payload }]), source and
+ * refs ([{ spec, section?, note? }], see utils/specRefs.js).
+ */
+export default function SequenceFlowDiagram({ source, label = "Sequence diagram", step, active, details, driver, payloads, stepDetails, reelSync, lanes, issues, variant }) {
+  return (
+    <div className={`sfx${lanes ? " sfx--lanes" : ""}${variant === "lucid" ? " sfx--lucid" : ""}`} role="group" aria-label={label}>
+      <ReactFlowProvider>
+        <Inner source={source} label={label} step={step} active={active} details={details} driver={driver} payloads={payloads} stepDetails={stepDetails} reelSync={reelSync} lanes={lanes} issues={issues} variant={variant} />
+      </ReactFlowProvider>
+    </div>
+  );
+}

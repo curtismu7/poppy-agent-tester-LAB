@@ -177,6 +177,19 @@ put in an error). Unset, the log layers say `unreachable` and what to set; the l
 this lab reads Elasticsearch only (it does not enable the shared Docker reader). The "outbound only to the hosts you type" claim has one named exception: the
 vendored shared Elasticsearch reader, which reads that loopback URL with its own fetch, in Real mode only and never in Mock.
 
+## Watch the videos (no setup needed)
+
+Two recorded runs (2026-11-17) are committed in this repo:
+
+- [`video/releases/2026-11-17-overview.mp4`](video/releases/2026-11-17-overview.mp4) — 2:23, the flow end to end at a walk: discover, sign in as the agent, token & session, approve.
+- [`video/releases/2026-11-17-demo.mp4`](video/releases/2026-11-17-demo.mp4) — 8:03, the full live run against a local PingFederate, with the why-this-call narration, the raw wire on every request, and the standards panel.
+
+Download and play in any video player; no sound, captions are on screen. Release copies (with captions files) also live at [release `poppy-videos-2026-11-17`](https://github.com/curtismu7/poppy-agent-tester-LAB/releases/tag/poppy-videos-2026-11-17).
+
+## Secrets in the videos
+
+The videos were reviewed frame by frame (OCR over every third frame plus visual review) before being committed. They show only the lab's own endpoints (`local.ping-devops.com` — the local PingFederate — and the synthetic `aidemo.ping.demo`) and a demo user (`denouser`) who signs in. The access token is shown raw once, as the demo intends; it is a local PingFederate token for `denouser`, `accounts:read` only, with a one-hour life, long expired. No tenant identifiers, secrets, private keys or real person names appear anywhere.
+
 ## Presenting
 
 Press `P` for presenter mode; the simulation banner stays. The talk track is in [docs/talk-track.md](docs/talk-track.md). Brand it with `customer.config.json` (see the example) or the vertical picker.

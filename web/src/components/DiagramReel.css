@@ -124,6 +124,6 @@
 .dreel-json-lit { color: var(--dc-red); }
 .dreel-font { margin-left: auto; display: inline-flex; gap: 4px; }
 .dreel-font button { min-width: 32px; padding: 2px 8px; border: 1px solid var(--control-border); border-radius: var(--radius-md); background: transparent; color: inherit; font: inherit; font-weight: 700; cursor: pointer; }
-.dreel-font button[aria-pressed="true"] { background: var(--th-status-info-bg); border-color: var(--th-status-info); }
+.dreel-font button[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); }
 .dreel-detail[data-font-size="small"] { zoom: 0.9; }
 .dreel-detail[data-font-size="large"] { zoom: 1.25; }

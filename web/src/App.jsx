@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, lazy, Suspense, useState } from "react";
 import fs from "node:fs";
 import RunPanel from "./components/RunPanel";
 import AtlasChat from "./components/AtlasChat";
@@ -7,9 +7,13 @@ import { getJson, resetWorkspace } from "./api";
 import TopMenu, { applyFontSize } from "./top-menu/TopMenu.jsx";
 import TalkTrackDialog from "./talk-track/TalkTrackDialog.jsx";
 import VerifyMark from "./components/VerifyMark.jsx";
+import StoryToggle, { storyKey } from "./story/StoryToggle.jsx";
+
+const StoryRoot = lazy(() => import("./StoryRoot.jsx"));
 
 const VERSION = (() => { try { return JSON.parse(fs.readFileSync(new URL("../../package.json", import.meta.url), "utf8")).version || null; } catch { return null; } })();
 
+export const STORY_PREFIX = "pat";
 export const TABS = [
   { id: "run", label: "Start flow" },
   { id: "chat", label: "Agent chat" },
@@ -37,6 +41,15 @@ export default function App() {
   const [story, setStory] = useState(null);
   const [tab, setTab] = useState(hashTab());
   const [presenter, setPresenter] = useState(false);
+  const [storyOn, setStoryOn] = useState(() => { try { return localStorage.getItem(storyKey(STORY_PREFIX)) === "story" || new URLSearchParams(window.location.search).get("story") === "1"; } catch { return false; } });
+  const [toggleKey, setToggleKey] = useState(0); // re-mounts the toggle after an in-story Exit so its pressed state follows
+  // Exit in the Story bar: back to Demo, remembered, and ?story=1 dropped from the address so a reload stays in Demo.
+  const leaveStory = useCallback(() => {
+    setStoryOn(false);
+    setToggleKey((k) => k + 1);
+    try { localStorage.setItem(storyKey(STORY_PREFIX), "demo"); } catch { /* storage blocked: the choice just does not persist */ }
+    try { const u = new URL(window.location.href); if (u.searchParams.has("story")) { u.searchParams.delete("story"); window.history.replaceState(null, "", u); } } catch { /* no address to tidy */ }
+  }, []);
   const [talkOpen, setTalkOpen] = useState(false);
   const [resetSignal, setResetSignal] = useState(0);
   const [resetMsg, setResetMsg] = useState("");
@@ -52,7 +65,7 @@ export default function App() {
   };
 
   useEffect(() => { getJson("/api/info").then(setInfo, () => setInfo(null)); }, []);
-  useEffect(() => { getJson(`/api/story?vertical=${encodeURIComponent(vertical)}`).then(setStory, () => setStory(null)); }, [vertical]);
+  useEffect(() => { getJson(`/api/cast?vertical=${encodeURIComponent(vertical)}`).then(setStory, () => setStory(null)); }, [vertical]);
   const TALK = story ? story.talkTrack : [];
   useEffect(() => {
     const on = () => setTab(hashTab());
@@ -107,7 +120,7 @@ export default function App() {
         <TopMenu
           mode={{ value: info?.source === "real" ? "real" : "mock", onChange: async (source) => {
             const res = await fetch("/api/mode", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ source }) }).catch(() => null);
-            if (res && res.ok) { const i = await getJson("/api/info").catch(() => null); setInfo(i); getJson(`/api/story?vertical=${encodeURIComponent(vertical)}`).then(setStory, () => setStory(null)); }
+            if (res && res.ok) { const i = await getJson("/api/info").catch(() => null); setInfo(i); getJson(`/api/cast?vertical=${encodeURIComponent(vertical)}`).then(setStory, () => setStory(null)); }
           }, realAvailable: info ? info.realAvailable === true : false, realHint: info?.realReason }}
           vertical={{ value: vertical, onChange: setVertical, options: story ? story.verticals : ["banking"] }}
           theme={{ value: theme, onChange: pickTheme }}
@@ -118,6 +131,7 @@ export default function App() {
           help={{ href: "https://github.com/curtismu7/poppy-agent-tester-LAB#readme" }}
           version={VERSION}
           onReset={reset}
+          extra={<StoryToggle key={toggleKey} prefix={STORY_PREFIX} onChange={setStoryOn} />}
         >
           <VerifyMark id="poppy-agent-tester" />
         </TopMenu>
@@ -131,6 +145,11 @@ export default function App() {
             <aside className="presenter-say" data-testid="presenter-say" aria-label="Talk track">
               {TALK.filter((t) => (tab === "run" ? ["say-first", "discover", "signin", "call"] : tab === "chat" ? ["say-first", "why-poppy"] : tab === "why" ? ["why-poppy", "value-company", "value-developer", "value-person", "value-ping"] : ["say-first", "why"]).includes(t.id)).map((t) => <p key={t.id}><strong>{t.title}.</strong> {t.say}</p>)}
             </aside>
+          )}
+          {storyOn && (
+            <Suspense fallback={null}>
+              <StoryRoot mode={info?.source === "real" ? "real" : "mock"} ready={info !== undefined} onExit={leaveStory} prefix={STORY_PREFIX} />
+            </Suspense>
           )}
           {tab === "run" && <RunPanel info={info} resetSignal={resetSignal} />}
           {tab === "chat" && <AtlasChat info={info} resetSignal={resetSignal} />}

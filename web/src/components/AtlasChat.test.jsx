@@ -46,7 +46,7 @@ describe("AtlasChat", () => {
     const chip = await waitFor(() => screen.getByTestId("atlas-chip-0"));
     expect(chip.textContent).toMatch(/Where's my order/);
     fireEvent.click(chip);
-    await waitFor(() => expect(sent).toEqual([{ from: "chat" }]));
+    await waitFor(() => expect(sent).toEqual([{ from: "chat", story: false }])); // story: true only when a story walk (or ?story=1) drives the sign-in
   });
 
   it("shows the hint and no chips until the Company origins are known", async () => {

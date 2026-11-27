@@ -14,7 +14,7 @@ function mockApi(shelf) {
     if (url === "/api/shelf") return shelf === "down" ? Promise.reject(new Error("down")) : json(shelf);
     if (url === "/api/info") return json({ hosted: false, configured: true, agentClientId: "https://agent.example/client.json", source: "mock", realAvailable: false });
     if (url === "/api/state") return json({ workspace: "w", config: null, discovery: null, signedIn: false, token: null, steps: [] });
-    if (url.startsWith("/api/story")) return json({ verticals: ["banking"], cast: {}, talkTrack: [] });
+    if (url.startsWith("/api/cast")) return json({ verticals: ["banking"], cast: {}, talkTrack: [] });
     if (url === "/api/sample") return json({ note: "EXAMPLE run: invented", steps: [] });
     if (url.startsWith("/api/diagram")) return json({ title: "t", intro: "i", nodes: [], steps: [] });
     return json({ error: "nope" }, 404);

@@ -45,6 +45,9 @@ const SCRIPT = {
 };
 
 function host(u) { try { return new URL(u).host; } catch { return u || ""; } }
+// Story mode hooks: the walk-through waits for these (the same contract as the sibling labs' pv:run-* events).
+const runStart = () => window.dispatchEvent(new CustomEvent("pat:run-start"));
+const runEnd = (ok) => window.dispatchEvent(new CustomEvent("pat:run-end", { detail: { ok } }));
 function scopeNames(state) { return Object.keys(state?.discovery?.poppy?.auth?.scopes ?? {}); }
 // A chat-sized summary: the count, plus the scope this run asks for (or the first three). The full list is in the step's JSON.
 export function scopeSummary(state) {
@@ -167,12 +170,14 @@ export default function AtlasChat({ info, resetSignal }) {
     if (!t || busy) return;
     setMsg(""); setBusy(true); setDraft("");
     setChat((c) => [...c, { who: "person", text: t }]);
+    runStart();
     // Before the Company is read, the agent reads the one typed above the chat.
     const company = !state?.discovery && origin.trim() && issuer.trim() ? { origin: origin.trim(), issuer: issuer.trim() } : {};
     const r = await postJson("/api/chat", { text: t, ...company });
     setBusy(false);
     await refresh();
-    if (!r.ok) { setChat((c) => c.slice(0, -1)); setDraft(t); setMsg(r.body.message ?? r.body.error ?? `HTTP ${r.status}`); return; }
+    if (!r.ok) { runEnd(false); setChat((c) => c.slice(0, -1)); setDraft(t); setMsg(r.body.message ?? r.body.error ?? `HTTP ${r.status}`); return; }
+    runEnd(true);
     setChat(r.body.messages ?? []);
     const lastTool = [...(r.body.tools ?? [])].reverse().find((x) => x.name in TOOL_ARROW);
     if (lastTool) setActiveArrow(TOOL_ARROW[lastTool.name]);
@@ -189,9 +194,11 @@ export default function AtlasChat({ info, resetSignal }) {
   const runDiscover = async () => {
     setMsg(""); setPhase("discover"); highlight("discover");
     say("person", SCRIPT.discover.person);
+    runStart();
     const r = await postJson("/api/discover", { origin: origin.trim(), issuer: issuer.trim() });
     const fresh = await refresh();
-    if (!r.ok) { setPhase("idle"); setMsg(r.body.message ?? r.body.error ?? `HTTP ${r.status}`); say("agent", "I could not read that Company origin. Check the Company origin and the issuer above the chat."); return; }
+    if (!r.ok) { runEnd(false); setPhase("idle"); setMsg(r.body.message ?? r.body.error ?? `HTTP ${r.status}`); say("agent", "I could not read that Company origin. Check the Company origin and the issuer above the chat."); return; }
+    runEnd(true);
     setActiveArrow(0);
     say("agent", SCRIPT.discover.agentLine(fresh));
     setPhase("discovered");
@@ -201,17 +208,20 @@ export default function AtlasChat({ info, resetSignal }) {
     setMsg(""); setPhase("signin"); highlight("authorize");
     say("person", SCRIPT.authorize.person);
     say("agent", SCRIPT.authorize.need);
-    const r = await postJson("/api/authorize", { from: "chat" });
-    if (!r.ok) { setPhase(scopes.length ? "discovered" : "idle"); setMsg(r.body.message ?? r.body.error ?? `HTTP ${r.status}`); return; }
-    window.location.assign(r.body.url);
+    runStart();
+    const r = await postJson("/api/authorize", { from: "chat", story: !!(new URLSearchParams(window.location.search).get("story") === "1" || sessionStorage.getItem("pat.story.playing")) });
+    if (!r.ok) { runEnd(false); setPhase(scopes.length ? "discovered" : "idle"); setMsg(r.body.message ?? r.body.error ?? `HTTP ${r.status}`); return; }
+    window.location.assign(r.body.url); // a success leaves the page; the run ends after the redirect (pat:run-end on return is not needed — the story restarts)
   };
 
   const runCall = async () => {
     setMsg(""); setPhase("call"); highlight("call");
     say("person", SCRIPT.call.person);
+    runStart();
     const r = await postJson("/api/call", { path: "/poppy/api/v1/me" });
     await refresh();
-    if (!r.ok) { setPhase(signedIn ? "signed-in" : "idle"); setMsg(r.body.message ?? r.body.error ?? `HTTP ${r.status}`); return; }
+    if (!r.ok) { runEnd(false); setPhase(signedIn ? "signed-in" : "idle"); setMsg(r.body.message ?? r.body.error ?? `HTTP ${r.status}`); return; }
+    runEnd(true);
     setLast(r.body);
     setActiveArrow(ARROW_VERIFIED);
     say("agent", SCRIPT.call.agentLine(state, r.body));

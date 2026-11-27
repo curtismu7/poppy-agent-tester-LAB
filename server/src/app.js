@@ -22,6 +22,7 @@ import { newTrace, formatTraceparent } from './trace.js';
 import { DIAGRAM_NAMES, buildDiagram } from './diagramData.js';
 import { loadCast, verticalFrom, VERTICALS } from './cast.js';
 import { buildStory } from './story.js';
+import { storyResponse } from './storyRoute.js';
 import { buildSample } from './sample.js';
 import { shelfInfo } from './shelfLink.js';
 import { chatTurn, MAX_TEXT } from './chatAgent.js';
@@ -76,11 +77,11 @@ export function createApp({ configFile = CONFIG, agent, health = createHealth({ 
     pendingByState.delete(String(req.query.state || ''));
     const rec = ws && sessions.get(ws);
     if (!rec?.pending || rec.pending.state !== req.query.state) return res.status(400).type('text').send('Unknown or expired sign-in. Start again from the page.');
-    const { verifier, useResource, returnTo, from, runId } = rec.pending;
+    const { verifier, useResource, returnTo, from, runId, story: pendingStory } = rec.pending;
     rec.pending = null;
     // The sign-in redirect may land on the public agent name, which serves nothing else; send the browser back to the loopback page.
     // Back to the tab the sign-in started from (#chat, #run), so the person lands where they were.
-    const home = (q) => `${returnTo || ''}/?${q}${from ? `#${from}` : ''}`;
+    const home = (q) => `${returnTo || ''}/?${q}${pendingStory ? '&story=1' : ''}${from ? `#${from}` : ''}`;
     // RFC 9207: if the redirect carries an iss it must be the issuer this sign-in started with (a mix-up with another server is refused),
     // and if the issuer says it always sends one, its absence is refused too.
     // A repeated or array-valued iss (?iss[]=...) is not a string and is refused, never coerced.
@@ -139,7 +140,7 @@ export function createApp({ configFile = CONFIG, agent, health = createHealth({ 
       // The chat tab's live agent: on when the server has a model key (never returned) and the build is not hosted.
       chatAgent: chat && !holder.hosted ? { live: true, model: chat.model } : { live: false, reason: holder.hosted ? 'hosted' : 'no_key' } }); });
   // customer.config.json is read on every request so editing it shows up on reload (rule 12).
-  api.get('/story', (req, res) => { res.set('Cache-Control', 'no-store'); res.json({ ...buildStory(loadCast(configFile, verticalFrom(req.query.vertical))), verticals: Object.keys(VERTICALS) }); });
+  api.get('/cast', (req, res) => { res.set('Cache-Control', 'no-store'); res.json({ ...buildStory(loadCast(configFile, verticalFrom(req.query.vertical))), verticals: Object.keys(VERTICALS) }); });
   // An example run (invented values, real shape): what the hosted build shows instead of reaching a real Company.
   // The example's own events are logged once, when it is first built (their stamps are the line times).
   let exampleLogged = false;
@@ -170,6 +171,8 @@ export function createApp({ configFile = CONFIG, agent, health = createHealth({ 
     }
   });
   api.get('/diagram', (req, res) => { res.set('Cache-Control', 'no-store'); const name = DIAGRAM_NAMES.includes(req.query.name) ? req.query.name : DIAGRAM_NAMES[0]; res.json(buildDiagram(name)); });
+  // Story mode's wording (video/captions.md), parsed by the vendored shared parser, at the path the family's tools expect (walk.py reads /api/story).
+  api.get('/story', (req, res) => { const { status, body } = storyResponse(); res.set('Cache-Control', 'no-store'); res.status(status).json(body); });
 
   // Discovery needs no agent identity; sign-in and calls do (needsAgent).
   const live = (handler, { needsAgent = true } = {}) => async (req, res) => {
@@ -290,7 +293,8 @@ export function createApp({ configFile = CONFIG, agent, health = createHealth({ 
     const from = typeof req.body?.from === 'string' && /^[a-z]{1,16}$/.test(req.body.from) ? req.body.from : null;
     // A sign-in joins the open run; once the last run has ended (its first Company call), a new sign-in begins a new run.
     const runId = rec.obs.open ?? startRun(rec.obs, rec.obs.client);
-    rec.pending = { state, verifier: pkce.verifier, useResource, returnTo, from, runId };
+    const storyReturn = req.body?.story === true;
+    rec.pending = { state, verifier: pkce.verifier, useResource, returnTo, from, runId, story: storyReturn };
     rec.config.scope = scope;
     pendingByState.set(state, ws);
     if (pendingByState.size > 1000) pendingByState.delete(pendingByState.keys().next().value);

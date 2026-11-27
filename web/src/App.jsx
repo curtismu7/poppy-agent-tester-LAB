@@ -106,7 +106,7 @@ export default function App() {
       <header className="shell-bar">
         <span className="shell-brand">
           <span className="shell-logo" aria-hidden="true">PAT</span>
-          <h1>Poppy Agent Tester</h1>
+          <h1>Poppy demo</h1>
           {info?.source === "real"
             ? <span className="shell-badge shell-badge--real" data-testid="mode-badge">Real</span>
             : <span className="shell-badge" data-testid="mode-badge">Mock</span>}
@@ -128,12 +128,12 @@ export default function App() {
           present={{ active: presenter, onToggle: () => setPresenter((v) => !v), label: "Presenter (P)" }}
           talkTrack={{ active: talkOpen, onToggle: () => setTalkOpen((v) => !v) }}
           shelfUrl="https://local.ping-devops.com:8443/"
-          help={{ href: "https://github.com/curtismu7/poppy-agent-tester-LAB#readme" }}
+          help={{ href: "https://github.com/curtismu7/poppy-demo-LAB#readme" }}
           version={VERSION}
           onReset={reset}
           extra={<StoryToggle key={toggleKey} prefix={STORY_PREFIX} onChange={setStoryOn} />}
         >
-          <VerifyMark id="poppy-agent-tester" />
+          <VerifyMark id="poppy-demo" />
         </TopMenu>
       </header>
       <main className="page">

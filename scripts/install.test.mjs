@@ -86,7 +86,7 @@ test('README carries the instructions section and the PDF is built from it', () 
   const readme = fs.readFileSync(path.join(root, 'README.md'), 'utf8');
   assert.match(readme, /<!-- instructions:start -->[\s\S]*curl -fsSL[\s\S]*<!-- instructions:end -->/);
   assert.match(readme, /A live run against PingOne/);
-  const pdf = fs.readFileSync(path.join(root, 'docs/Poppy-Agent-Tester-Setup.pdf'));
+  const pdf = fs.readFileSync(path.join(root, 'docs/Poppy-Demo-Setup.pdf'));
   assert.equal(pdf.subarray(0, 4).toString(), '%PDF');
   assert.ok(pdf.length > 20000);
 });

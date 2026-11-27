@@ -1,9 +1,9 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: poppy-agent-tester
-  labels: { app: poppy-agent-tester }
+  name: poppy-demo
+  labels: { app: poppy-demo }
 spec:
-  selector: { app: poppy-agent-tester }
+  selector: { app: poppy-demo }
   ports:
     - { name: http, port: 80, targetPort: http }

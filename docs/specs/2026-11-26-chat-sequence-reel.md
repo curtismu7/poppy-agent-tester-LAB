@@ -1,11 +1,11 @@
-# HITL-style chat + sequence + movie reel (poppy-agent-tester-LAB)
+# HITL-style chat + sequence + movie reel (poppy-demo-LAB)
 
 **Status:** draft   **Owner:** Curtis
 **Process tier:** 2 (colleagues demo these labs).
 **Worktree:** `/Users/cmuir/Development/.wt-poppy-atlas-story` (branch `feat/atlas-h_movie`), based on origin/main 834c004.
 
 ## Goal
-Bring the HITL-demo presentation style into poppy-agent-tester's Agent chat, so a colleague sees the conversation, the full sequence diagram of every request it caused, and a movie-reel of wire-detail cards — the three surfaces that made the HITL MFA lab and ciba-approval-sequence demos work:
+Bring the HITL-demo presentation style into poppy-demo's Agent chat, so a colleague sees the conversation, the full sequence diagram of every request it caused, and a movie-reel of wire-detail cards — the three surfaces that made the HITL MFA lab and ciba-approval-sequence demos work:
 
 1. **Chat agent** (exists: `AtlasChat` — keep, light touches only).
 2. **Sequence diagram** (new): the run's requests as a clickable lifeline sequence — person, agent (this lab), PingFederate, Company API — rendered with the shared `SequenceFlowDiagram` component from ciba-approval-sequence-LAB, driven by the SAME real steps the chat/run produced (`/api/state` steps), not a separate made-up diagram.

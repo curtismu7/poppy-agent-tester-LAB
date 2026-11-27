@@ -1,4 +1,4 @@
-// Builds docs/Poppy-Agent-Tester-Setup.pdf from the README section between the instructions markers.
+// Builds docs/Poppy-Demo-Setup.pdf from the README section between the instructions markers.
 // One source: edit the README, run `npm run instructions-pdf`, commit both. Needs Chrome (CHROME=/path to override).
 import fs from 'node:fs';
 import os from 'node:os';
@@ -15,7 +15,7 @@ const esc = (t) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, 
 const inline = (t) => esc(t)
   .replace(/`([^`]+)`/g, '<code>$1</code>')
   .replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>')
-  .replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_, t, u) => `<a href="${/^https?:/.test(u) ? u : `https://github.com/curtismu7/poppy-agent-tester-LAB/blob/main/${u}`}">${t}</a>`);
+  .replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_, t, u) => `<a href="${/^https?:/.test(u) ? u : `https://github.com/curtismu7/poppy-demo-LAB/blob/main/${u}`}">${t}</a>`);
 const cells = (l) => l.trim().replace(/^\||\|$/g, '').split(/(?<!\\)\|/).map((c) => c.trim().replace(/\\\|/g, '|'));
 
 const lines = m[1].split('\n'); const out = [];
@@ -38,11 +38,11 @@ const css = `body{font:14px/1.5 -apple-system,Helvetica,Arial,sans-serif;color:#
 h2{font-size:17px;margin:20px 0 6px}pre{background:#f2f4f7;padding:10px 12px;border-radius:6px;white-space:pre-wrap;word-break:break-all;font-size:12.5px}
 code{background:#f2f4f7;padding:1px 4px;border-radius:3px;font-size:12.5px}pre code{padding:0}table{border-collapse:collapse;width:100%;margin:8px 0;break-inside:avoid}
 th,td{border:1px solid #ccd;padding:5px 8px;text-align:left;vertical-align:top}th{background:#eef1f5}a{color:#0b5cad}`;
-const html = `<!doctype html><meta charset="utf-8"><title>Poppy Agent Tester LAB: set up and run</title><style>${css}</style><h1 style="font-size:28px;margin-top:0">Poppy Agent Tester LAB</h1><p>Set up and run. Source: README.md in the repository.</p>${out.join('\n')}`;
+const html = `<!doctype html><meta charset="utf-8"><title>Poppy demo LAB: set up and run</title><style>${css}</style><h1 style="font-size:28px;margin-top:0">Poppy demo LAB</h1><p>Set up and run. Source: README.md in the repository.</p>${out.join('\n')}`;
 
 const tmp = path.join(os.tmpdir(), `poppy-instructions-${process.pid}.html`);
 fs.writeFileSync(tmp, html);
-const pdf = path.join(root, 'docs/Poppy-Agent-Tester-Setup.pdf');
+const pdf = path.join(root, 'docs/Poppy-Demo-Setup.pdf');
 const chrome = process.env.CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 execFileSync(chrome, ['--headless=new', '--disable-gpu', '--no-pdf-header-footer', `--print-to-pdf=${pdf}`, `file://${tmp}`], { stdio: 'ignore' });
 fs.rmSync(tmp);

@@ -3,9 +3,9 @@
 # run unless OWNER_APPROVED=1 is set by the owner. It never builds or pushes an image; it applies manifests for an image
 # that already exists in the registry.
 #
-#   OWNER_APPROVED=1 NAMESPACE=<ns> IMAGE=<registry>/<repo>/poppy-agent-tester:<sha> SE_HOST=<host> INGRESS_CLASS=<class> CLUSTER_ISSUER=<issuer> k8s/deploy.sh [--dry-run]
+#   OWNER_APPROVED=1 NAMESPACE=<ns> IMAGE=<registry>/<repo>/poppy-demo:<sha> SE_HOST=<host> INGRESS_CLASS=<class> CLUSTER_ISSUER=<issuer> k8s/deploy.sh [--dry-run]
 #
-# SE_HOST is a name two labels below the cluster's wildcard (for example poppy-agent-tester.<cluster-host>): the cluster's external-dns creates
+# SE_HOST is a name two labels below the cluster's wildcard (for example poppy-demo.<cluster-host>): the cluster's external-dns creates
 # its DNS record from the ingress, and cert-manager issues its certificate through CLUSTER_ISSUER. Both can take a few minutes.
 #
 # After the deploy (not done by this script): verify by CONTENT, not 200 (GET /api/info must say {mode:mock, simulated:true, hosted:true}),
@@ -33,6 +33,6 @@ render() {
 }
 if [ "${1:-}" = "--dry-run" ]; then render deployment.yaml; render service.yaml; render certificate.yaml; render ingress.yaml; exit 0; fi
 for f in deployment.yaml service.yaml certificate.yaml ingress.yaml; do render "$f" | kubectl apply -n "$NAMESPACE" -f -; done
-kubectl -n "$NAMESPACE" rollout status deployment/poppy-agent-tester --timeout=120s
+kubectl -n "$NAMESPACE" rollout status deployment/poppy-demo --timeout=120s
 # The certificate is issued by cert-manager (DNS-01), which can take a few minutes; the pod is already serving.
-kubectl -n "$NAMESPACE" wait certificate/poppy-agent-tester --for=condition=Ready --timeout=600s || echo "certificate not Ready yet: check 'kubectl -n $NAMESPACE describe certificate poppy-agent-tester'" >&2
+kubectl -n "$NAMESPACE" wait certificate/poppy-demo --for=condition=Ready --timeout=600s || echo "certificate not Ready yet: check 'kubectl -n $NAMESPACE describe certificate poppy-demo'" >&2

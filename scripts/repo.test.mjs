@@ -15,7 +15,7 @@ test('the files the standalone rules ask for are present', () => {
 
 test('the shelf entry is valid and portable: relative composeFile, loopback url, health path', () => {
   const e = JSON.parse(read('docs/shelf-entry.json')).demos[0];
-  assert.equal(e.id, 'poppy-agent-tester');
+  assert.equal(e.id, 'poppy-demo');
   assert.equal(e.kind, 'Demo');
   assert.equal(e.healthPath, '/api/health');
   assert.match(e.url, /^http:\/\/localhost:54\d\d$/);

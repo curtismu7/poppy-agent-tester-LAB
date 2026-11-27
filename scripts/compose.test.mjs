@@ -58,7 +58,7 @@ test('the container is locked down: read-only fs, no capabilities, no new privil
 
 test('docker-compose.yml allows the family lab-proxy name by default, never the bare launcher name', () => {
   const compose = fs.readFileSync(new URL('../docker-compose.yml', import.meta.url), 'utf8');
-  assert.match(compose, /LAB_ALLOWED_HOSTS: \$\{LAB_ALLOWED_HOSTS:-poppy-agent-tester\.local\.ping-devops\.com\}\n/);
+  assert.match(compose, /LAB_ALLOWED_HOSTS: \$\{LAB_ALLOWED_HOSTS:-poppy-demo\.local\.ping-devops\.com\}\n/);
   assert.doesNotMatch(compose, /LAB_ALLOWED_HOSTS:[^\n]*[-,]local\.ping-devops\.com\b/);
 });
 

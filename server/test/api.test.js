@@ -167,7 +167,7 @@ test('/api/health is demo-health/1 with runtime live', async () => {
   const h = await (await get('/api/health')).json();
   assert.equal(h.schema, 'demo-health/1');
   assert.equal(h.runtime, 'live');
-  assert.equal(h.demo.id, 'poppy-agent-tester');
+  assert.equal(h.demo.id, 'poppy-demo');
 });
 
 // ---- review findings: the properties below had no test ----

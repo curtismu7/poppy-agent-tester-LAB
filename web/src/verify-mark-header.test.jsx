@@ -26,7 +26,7 @@ afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 
 describe("verification mark in the header", () => {
   it("shows this lab's own mark inside the top menu, and no other lab's", async () => {
-    mockApi({ shelfUrl: "http://shelf.example", demos: [{ id: "other-lab", verification: mark("in-progress", "In progress") }, { id: "poppy-agent-tester", verification: mark("verified", "Verified", { note: "Every step run on the mock" }) }] });
+    mockApi({ shelfUrl: "http://shelf.example", demos: [{ id: "other-lab", verification: mark("in-progress", "In progress") }, { id: "poppy-demo", verification: mark("verified", "Verified", { note: "Every step run on the mock" }) }] });
     render(<App />);
     const bar = within(await screen.findByTestId("top-menu"));
     expect(await bar.findByText("Verified")).toBeInTheDocument();
@@ -36,7 +36,7 @@ describe("verification mark in the header", () => {
   });
 
   it("shows nothing without a mark, when /api/shelf has only { shelfUrl }, or when the shelf is unreachable", async () => {
-    for (const shelf of [{ shelfUrl: "http://shelf.example", demos: [{ id: "poppy-agent-tester", verification: null }] }, { shelfUrl: "http://shelf.example" }, "down"]) {
+    for (const shelf of [{ shelfUrl: "http://shelf.example", demos: [{ id: "poppy-demo", verification: null }] }, { shelfUrl: "http://shelf.example" }, "down"]) {
       mockApi(shelf);
       const { unmount } = render(<App />);
       await screen.findByTestId("top-menu");
@@ -49,8 +49,8 @@ describe("verification mark in the header", () => {
 
   it("fails when the line is removed from App.jsx (the badge needs the lab's own shelf id)", () => {
     const src = fs.readFileSync(path.join(process.cwd(), "src", "App.jsx"), "utf8");
-    expect(src.match(/<VerifyMark id="poppy-agent-tester" \/>/g)).toHaveLength(1);
+    expect(src.match(/<VerifyMark id="poppy-demo" \/>/g)).toHaveLength(1);
     const shelf = JSON.parse(fs.readFileSync(path.join(process.cwd(), "..", "docs", "shelf-entry.json"), "utf8"));
-    expect(shelf.demos[0].id).toBe("poppy-agent-tester");
+    expect(shelf.demos[0].id).toBe("poppy-demo");
   });
 });

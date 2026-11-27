@@ -1,8 +1,8 @@
 #!/bin/sh
-# One command: download, start and open the Poppy Agent Tester LAB in the browser.
+# One command: download, start and open the Poppy demo LAB in the browser.
 #
-#   curl -fsSL https://raw.githubusercontent.com/curtismu7/poppy-agent-tester-LAB/main/scripts/install.sh | sh
-#   curl -fsSL https://raw.githubusercontent.com/curtismu7/poppy-agent-tester-LAB/main/scripts/install.sh | sh -s -- --real
+#   curl -fsSL https://raw.githubusercontent.com/curtismu7/poppy-demo-LAB/main/scripts/install.sh | sh
+#   curl -fsSL https://raw.githubusercontent.com/curtismu7/poppy-demo-LAB/main/scripts/install.sh | sh -s -- --real
 #
 # Default (mock): the explainer with an example run of invented values. Needs no tenant, no PingFederate, no sign-in.
 # --real: the live run. Needs your own Company and PingFederate and the agent reachable over https (docs/setup.md).
@@ -11,8 +11,8 @@
 # Runs in Docker when Docker is running, otherwise on Node 26 (a --real run prefers Node 26 when it is installed). Listens on 127.0.0.1 only (ports 5450-5499).
 set -eu
 
-REPO=curtismu7/poppy-agent-tester-LAB
-NAME=poppy-agent-tester-lab
+REPO=curtismu7/poppy-demo-LAB
+NAME=poppy-demo-lab
 MODE=mock; OPEN=1; DRY=0; STOP=0; PORT=${HOST_PORT:-}; RUNTIME=auto; DIR=${PAT_DIR:-}; REGION=com; DEMOUSER=0; CPORT=5452
 
 say() { printf '%s\n' "$*"; }
@@ -22,7 +22,7 @@ runq() { if [ "$DRY" = 1 ]; then say "+ $*"; else "$@" >/dev/null 2>&1; fi; }
 
 usage() {
   cat <<'EOF'
-Poppy Agent Tester LAB: download, start, open the browser.
+Poppy demo LAB: download, start, open the browser.
 
   sh install.sh [options]
 
@@ -31,7 +31,7 @@ Poppy Agent Tester LAB: download, start, open the browser.
   --pingone         live run against your own PingOne environment: creates the PingOne objects and starts the reference Company
   --region R        PingOne region for --pingone: com (default), ca, eu, com.au, sg, asia
   --demo-user       with --pingone: also create one demo user (needs the worker to manage users)
-  --dir DIR         where the lab lives (default: ~/poppy-agent-tester-LAB)
+  --dir DIR         where the lab lives (default: ~/poppy-demo-LAB)
   --port N          port on 127.0.0.1, 5450-5499 (default: the first free one)
   --runtime R       docker or node (default: docker if it is running, else node; --real prefers node)
   --no-open         do not open the browser
@@ -39,7 +39,7 @@ Poppy Agent Tester LAB: download, start, open the browser.
   --stop            stop the lab started by this script
   --help            this text
 
-Pipe form:  curl -fsSL https://raw.githubusercontent.com/curtismu7/poppy-agent-tester-LAB/main/scripts/install.sh | sh -s -- --real
+Pipe form:  curl -fsSL https://raw.githubusercontent.com/curtismu7/poppy-demo-LAB/main/scripts/install.sh | sh -s -- --real
 EOF
 }
 
@@ -77,10 +77,10 @@ fi
 # Where is the lab? An explicit --dir or PAT_DIR wins; running this script from inside a clone uses that clone.
 if [ -z "$DIR" ]; then
   here=$(cd "$(dirname "$0")/.." 2>/dev/null && pwd || true)
-  if [ -n "$here" ] && [ -f "$here/Dockerfile" ] && grep -q '"name": "poppy-agent-tester"' "$here/package.json" 2>/dev/null; then
+  if [ -n "$here" ] && [ -f "$here/Dockerfile" ] && grep -q '"name": "poppy-demo"' "$here/package.json" 2>/dev/null; then
     DIR=$here
   else
-    DIR=$HOME/poppy-agent-tester-LAB
+    DIR=$HOME/poppy-demo-LAB
   fi
 fi
 
@@ -230,7 +230,7 @@ fi
 
 say ""
 [ "$DRY" = 1 ] && { say "Dry run: nothing was started or changed."; exit 0; }
-say "Poppy Agent Tester LAB ($MODE) is running: $URL"
+say "Poppy demo LAB ($MODE) is running: $URL"
 if [ "$MODE" = pingone ]; then
   say "Live run against your PingOne environment. The reference Company is at http://127.0.0.1:$CPORT. Press Start flow, then sign in as a user of that environment."
   say "Remove the PingOne objects when you are done: node $DIR/scripts/pingone/teardown.mjs"

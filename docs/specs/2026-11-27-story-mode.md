@@ -1,4 +1,4 @@
-# Story mode (poppy-agent-tester-LAB)
+# Story mode (poppy-demo-LAB)
 
 **Status:** draft   **Owner:** Curtis
 **Process tier:** 2 (colleagues demo these labs).

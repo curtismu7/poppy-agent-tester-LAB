@@ -17,8 +17,8 @@ const CO = 'https://company.example';
 const ISS = 'https://pf.example:9031';
 const BASE = 'https://agent.example';
 const PRODUCTS = [...new Set(layerMatchers.map((m) => m.product))];
-// <iso> poppy-agent-tester step=<id> layer=<layer> actor=<who> result=<word> mode=<mode>
-const LINE = /^\d{4}-\d\d-\d\dT[\d:.]+Z poppy-agent-tester step=[A-Za-z0-9._:/@-]+ layer=[A-Za-z0-9._:/@-]+ actor=[A-Za-z0-9._:/@-]+ result=(passed|stopped|unclear|no-reply) mode=(mock|real)$/;
+// <iso> poppy-demo step=<id> layer=<layer> actor=<who> result=<word> mode=<mode>
+const LINE = /^\d{4}-\d\d-\d\dT[\d:.]+Z poppy-demo step=[A-Za-z0-9._:/@-]+ layer=[A-Za-z0-9._:/@-]+ actor=[A-Za-z0-9._:/@-]+ result=(passed|stopped|unclear|no-reply) mode=(mock|real)$/;
 const ESKEY = ['read', 'only', 'test', 'value'].join('-'); // built from parts so no scanner reads it as a credential
 const k = generateEs256Key();
 const agent = { privateKey: k.privateKey, publicJwk: k.publicJwk, kid: jwkThumbprint(k.publicJwk) };

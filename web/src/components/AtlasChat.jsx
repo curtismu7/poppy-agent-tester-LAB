@@ -261,7 +261,7 @@ export default function AtlasChat({ info, resetSignal }) {
             <label htmlFor="atlas-text" className="sr-only">Message your agent</label>
             <input id="atlas-text" data-testid="atlas-input" value={draft} onChange={(e) => setDraft(e.target.value)} maxLength={500} placeholder="Ask your agent…" autoComplete="off" disabled={busy} />
             {/* ui-pattern: allow P9 Send and the suggested-question chips stay secondary; the chat view's one red control is Simulate in the diagram's DiagramControls (dc-ctrl-btn--simulate), which the checker does not read as .primary */}
-            <button type="submit" data-testid="atlas-send" disabled={busy || !draft.trim()}>Send</button>
+            <button type="submit" className="primary" data-testid="atlas-send" disabled={busy || !draft.trim()}>Send</button>
           </form>
         )}
         {!live && info && !info.hosted && <p className="muted atlas-note" data-testid="atlas-guided-note">Guided script: set ANTHROPIC_API_KEY on the server to talk to a live Claude agent.</p>}

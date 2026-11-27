@@ -1,9 +1,9 @@
 {
-  "name": "@poppy-agent-tester/web",
+  "name": "@poppy-demo/web",
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "React + Vite UI for the Poppy Agent Tester. Talks only to its own origin.",
+  "description": "React + Vite UI for the Poppy demo. Talks only to its own origin.",
   "scripts": {
     "dev": "vite",
     "build": "vite build",

@@ -14,7 +14,7 @@ import { createRunObservability } from './runObservability.js';
 import { readersFromEnv } from './runObservabilityReaders.js';
 
 export const MAX_EVENTS = 100;
-const SERVICE = 'poppy-agent-tester';
+const SERVICE = 'poppy-demo';
 // A value that goes INTO a stdout line: only safe characters survive, so a value cannot add a fake key=value pair, a quote or a newline.
 export const lineValue = (v, n = 60) => String(v ?? '').replace(/[^A-Za-z0-9._:/@-]+/g, '_').slice(0, n) || 'unknown';
 const RESULT = { allowed: 'passed', refused: 'stopped', blocked: 'stopped', info: 'unclear' };

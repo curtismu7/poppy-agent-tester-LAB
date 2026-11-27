@@ -165,7 +165,7 @@ export function createApp({ configFile = CONFIG, agent, health = createHealth({ 
       const record = await buildRealRecord({ events, kind: obs.client?.kind ?? null, who: { actor: obs.client?.id, traceId: obs.traceId }, readers: runObsReaders });
       return res.json({ record });
     } catch (e) {
-      console.error(`[poppy-agent-tester] run-observability failed: ${String(e?.code || e?.name || 'Error').slice(0, 40)}: ${String(e?.message).replace(/[\r\n]+/g, ' ').slice(0, 200)}`);
+      console.error(`[poppy-demo] run-observability failed: ${String(e?.code || e?.name || 'Error').slice(0, 40)}: ${String(e?.message).replace(/[\r\n]+/g, ' ').slice(0, 200)}`);
       if (e instanceof RunObsError) return res.status(e.status).json({ error: e.code, message: e.message });
       return res.status(500).json({ error: 'internal_error', message: 'The run observability record could not be built.' });
     }

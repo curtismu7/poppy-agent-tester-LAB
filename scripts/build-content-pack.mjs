@@ -16,10 +16,10 @@ export function buildPack() {
   const tab = { 'say-first': 'run', discover: 'run', signin: 'run', call: 'run', why: 'diagram', unverified: 'run', 'why-poppy': 'why', 'value-company': 'why', 'value-developer': 'why', 'value-person': 'why', 'value-ping': 'why' };
   return {
     schema: 'demo-content-pack/1',
-    id: 'poppy-agent-tester',
-    title: 'Poppy Agent Tester',
+    id: 'poppy-demo',
+    title: 'Poppy demo',
     version,
-    demo: { id: 'poppy-agent-tester', name: 'Poppy Agent Tester', catalog: 'D100', baseUrl: 'http://localhost:5450', doctor: '/api/health', tags: ['agent', 'poppy', 'pingfederate', 'cimd'] },
+    demo: { id: 'poppy-demo', name: 'Poppy demo', catalog: 'D100', baseUrl: 'http://localhost:5450', doctor: '/api/health', tags: ['agent', 'poppy', 'pingfederate', 'cimd'] },
     glossary: [
       { id: 'cimd', term: 'Client metadata document (CIMD)', definition: 'A client_id that is a URL. The authorization server fetches that URL to learn the client\'s name, redirect URIs and keys, so no one has to register the client first.', aliases: ['client id metadata document'] },
       { id: 'poppy-json', term: 'poppy.json', definition: 'A public document at /.well-known/poppy.json where a Company lists its issuer, scopes (each with a scope_hint) and APIs for personal agents.', aliases: ['/.well-known/poppy.json'] },

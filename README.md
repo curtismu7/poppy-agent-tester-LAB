@@ -1,8 +1,8 @@
-# Poppy Agent Tester LAB
+# Poppy demo LAB
 
 Tier: Demo
 
-Repo: https://github.com/curtismu7/poppy-agent-tester-LAB
+Repo: https://github.com/curtismu7/poppy-demo-LAB
 
 Plays the personal agent from the Personal Agent Protocol (Poppy, spec 1.0). You type a Company origin and a PingFederate issuer; the app reads the Company's `poppy.json`, signs in to the real PingFederate with a URL as its client id and PKCE, and calls the Company API with a signed `Poppy-Session`. Every request, token and signature is shown raw.
 
@@ -14,12 +14,12 @@ Plays the personal agent from the Personal Agent Protocol (Poppy, spec 1.0). You
 You need a Mac or Linux terminal (on Windows, use WSL), **Docker running** or **Node 26 or newer** (`--pingone` needs Node 26), and `git` or `curl`. Nothing else, for the first run.
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/curtismu7/poppy-agent-tester-LAB/main/scripts/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/curtismu7/poppy-demo-LAB/main/scripts/install.sh | sh
 ```
 
-The script downloads the lab to `~/poppy-agent-tester-LAB`, builds and starts it on the first free port in 5450-5499 (127.0.0.1 only, never the network), waits until it answers, and opens your browser. The first build takes a minute or two.
+The script downloads the lab to `~/poppy-demo-LAB`, builds and starts it on the first free port in 5450-5499 (127.0.0.1 only, never the network), waits until it answers, and opens your browser. The first build takes a minute or two.
 
-Stop it with `sh ~/poppy-agent-tester-LAB/scripts/install.sh --stop`. Run the same command again to update and restart.
+Stop it with `sh ~/poppy-demo-LAB/scripts/install.sh --stop`. Run the same command again to update and restart.
 
 | Option | What it does |
 |---|---|
@@ -75,7 +75,7 @@ What was tested: the setup script against a real PingOne environment, where it c
 | "need Docker (running) or Node 26" | Install one of them. Node 26 is at https://nodejs.org. |
 | "port N is in use" | Leave `--port` off to take the first free port, or pick another between 5450 and 5499. |
 | The page does not open | Open the address the script printed, `http://localhost:<port>/`. |
-| It did not start in 60 seconds | Docker: `docker logs poppy-agent-tester-lab`. Node: `~/poppy-agent-tester-LAB/.launcher.log`. |
+| It did not start in 60 seconds | Docker: `docker logs poppy-demo-lab`. Node: `~/poppy-demo-LAB/.launcher.log`. |
 
 The lab listens on 127.0.0.1 only, runs read-only with no extra privileges in Docker, and reaches only the two hosts you type. See [docs/safety.md](docs/safety.md).
 <!-- instructions:end -->
@@ -85,8 +85,8 @@ The lab listens on 127.0.0.1 only, runs read-only with no extra privileges in Do
 Prerequisites: Node 26. Docker (OrbStack) only for the Docker form.
 
 ```
-git clone https://github.com/curtismu7/poppy-agent-tester-LAB.git
-cd poppy-agent-tester-LAB
+git clone https://github.com/curtismu7/poppy-demo-LAB.git
+cd poppy-demo-LAB
 npm ci
 npm run build
 npm run doctor
@@ -96,7 +96,7 @@ npm start
 ## Ports, and what to do if the port is taken
 
 ```
-Ports: poppy-agent-tester-LAB listens on 5450 (set with PORT, default 5450).
+Ports: poppy-demo-LAB listens on 5450 (set with PORT, default 5450).
 Port range for this app: 5450-5499.
 
 If the port is taken:
@@ -151,7 +151,7 @@ for the current run in the current mode (`{record}`, `{record: null, message}` b
 - **Real, late lines**: a collector ships lines with a delay, so a step just run can read `not logged` at first. In Real the page shows a **Re-read logs**
   button and reads once more about 5 seconds after each step, also after a failed one (Mock needs neither). If the Elasticsearch search was cut at its cap
   (500 documents) and found nothing for a layer, the chip reads **Not found (partial search)** and the reason says absence is not proof.
-- **The lab's own log**: each step this lab's server takes is one stdout line, `<time> poppy-agent-tester step=<step> layer=<layer> actor=<who> result=<passed|stopped|unclear|no-reply> mode=<mock|real>`,
+- **The lab's own log**: each step this lab's server takes is one stdout line, `<time> poppy-demo step=<step> layer=<layer> actor=<who> result=<passed|stopped|unclear|no-reply> mode=<mock|real>`,
   never a token or an id; every value is reduced to safe characters so it cannot add a fake `key=value` pair or a second line. The lines avoid the words the shared
   matchers read as a decision (refused, denied, invalid, failed, token, audience, scope, served ...), and a test proves no shared matcher reads one. The page does not read them back.
 - **What each lane holds here** (the panel's lane names are fixed): Person is the issuer's sign-in reply; Agent is the personal agent (its own signing in Mock, the issuer's
@@ -184,7 +184,7 @@ Two recorded runs (2026-11-17) are committed in this repo:
 - [`video/releases/2026-11-17-overview.mp4`](video/releases/2026-11-17-overview.mp4) — 2:23, the flow end to end at a walk: discover, sign in as the agent, token & session, approve.
 - [`video/releases/2026-11-17-demo.mp4`](video/releases/2026-11-17-demo.mp4) — 8:03, the full live run against a local PingFederate, with the why-this-call narration, the raw wire on every request, and the standards panel.
 
-Download and play in any video player; no sound, captions are on screen. Release copies (with captions files) also live at [release `poppy-videos-2026-11-17`](https://github.com/curtismu7/poppy-agent-tester-LAB/releases/tag/poppy-videos-2026-11-17).
+Download and play in any video player; no sound, captions are on screen. Release copies (with captions files) also live at [release `poppy-videos-2026-11-17`](https://github.com/curtismu7/poppy-demo-LAB/releases/tag/poppy-videos-2026-11-17).
 
 ## Secrets in the videos
 

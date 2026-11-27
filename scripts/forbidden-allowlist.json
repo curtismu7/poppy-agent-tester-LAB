@@ -6,7 +6,7 @@
       "reason": "The public name of the family lab-proxy (https://local.ping-devops.com:8443). The Origin check compares the browser's Origin with it, so the code and its tests must name it."
     },
     {
-      "host": "poppy-agent-tester.local.ping-devops.com",
+      "host": "poppy-demo.local.ping-devops.com",
       "reason": "The Host name the lab-proxy sends to this lab; LAB_ALLOWED_HOSTS defaults to it in docker-compose.yml, as in the other family labs."
     }
   ],

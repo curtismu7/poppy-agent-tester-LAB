@@ -27,4 +27,4 @@ Also copy the CA bundle into the agent's data volume (the server reads
 NODE_EXTRA_CA_CERTS=/data/ca.pem):
 
     docker cp <main-demo-checkout>/certs/ca-bundle-with-mkcert.pem \
-      poppy-agent-tester-poppy-agent-tester-1:/data/ca.pem
+      poppy-demo-poppy-demo-1:/data/ca.pem

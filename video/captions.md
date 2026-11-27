@@ -1,5 +1,5 @@
 <!--
-  Story wording for poppy-agent-tester-LAB. The lab serves this file at GET /api/story (the shared Story parser);
+  Story wording for poppy-demo-LAB. The lab serves this file at GET /api/story (the shared Story parser);
   the live Story reads that. No recorded video exists yet; when one is made it must read this same file.
 
   Rules for editing safely:

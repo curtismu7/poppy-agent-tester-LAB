@@ -8,7 +8,7 @@ import { labProxyHosts } from '../src/safety.js';
 import { createApp } from '../src/app.js';
 import { createHealth } from '../src/health.js';
 
-const NAME = 'poppy-agent-tester.local.ping-devops.com';
+const NAME = 'poppy-demo.local.ping-devops.com';
 const PORT = 5450;
 const LAUNCHER = 'https://local.ping-devops.com:8443';
 const PROXIED = { host: `${NAME}:${PORT}`, 'x-forwarded-host': 'local.ping-devops.com:8443', 'x-forwarded-proto': 'https' };

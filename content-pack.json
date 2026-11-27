@@ -1,11 +1,11 @@
 {
   "schema": "demo-content-pack/1",
-  "id": "poppy-agent-tester",
-  "title": "Poppy Agent Tester",
+  "id": "poppy-demo",
+  "title": "Poppy demo",
   "version": "0.1.0",
   "demo": {
-    "id": "poppy-agent-tester",
-    "name": "Poppy Agent Tester",
+    "id": "poppy-demo",
+    "name": "Poppy demo",
     "catalog": "D100",
     "baseUrl": "http://localhost:5450",
     "doctor": "/api/health",

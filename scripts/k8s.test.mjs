@@ -29,10 +29,10 @@ test('no secret, tenant id, credential or real host sits in the manifests', () =
 
 test('the public ingress terminates TLS on its own host, is rate limited, and rewrites Host to loopback', () => {
   const ing = read('k8s/ingress.yaml');
-  for (const re of [/tls:/, /secretName: poppy-agent-tester-tls/, /limit-rps/, /limit-connections/, /proxy-body-size/, /ssl-redirect: "true"/, /upstream-vhost: "127\.0\.0\.1:5450"/]) assert.match(ing, re);
+  for (const re of [/tls:/, /secretName: poppy-demo-tls/, /limit-rps/, /limit-connections/, /proxy-body-size/, /ssl-redirect: "true"/, /upstream-vhost: "127\.0\.0\.1:5450"/]) assert.match(ing, re);
   const cert = read('k8s/certificate.yaml');
   assert.match(cert, /kind: Certificate/);
-  assert.match(cert, /secretName: poppy-agent-tester-tls/);
+  assert.match(cert, /secretName: poppy-demo-tls/);
   assert.match(cert, /- __SE_HOST__/);
 });
 
@@ -44,7 +44,7 @@ test('the Dockerfile has one image for both forms: MODE defaults to mock, no for
 });
 
 test('deploy.sh refuses without owner approval, without an immutable tag, and with a bad host', () => {
-  const ok = { OWNER_APPROVED: '1', NAMESPACE: 'ns-x', IMAGE: 'registry.example/team/poppy-agent-tester:abc1234', SE_HOST: 'app.demo.example', INGRESS_CLASS: 'class-x', CLUSTER_ISSUER: 'issuer-x' };
+  const ok = { OWNER_APPROVED: '1', NAMESPACE: 'ns-x', IMAGE: 'registry.example/team/poppy-demo:abc1234', SE_HOST: 'app.demo.example', INGRESS_CLASS: 'class-x', CLUSTER_ISSUER: 'issuer-x' };
   assert.equal(run({}).status, 2, 'no approval');
   for (const IMAGE of ['registry.example/x:latest', 'registry.example/x:HEAD', 'registry.example/x', 'registry.example/x:', 'reg;rm/x:1']) assert.equal(run({ ...ok, IMAGE }).status, 2, IMAGE);
   assert.equal(run({ ...ok, SE_HOST: 'Bad Host' }).status, 2);
@@ -56,7 +56,7 @@ test('deploy.sh refuses without owner approval, without an immutable tag, and wi
   assert.equal(run({ ...ok, OWNER_APPROVED: '0' }).status, 2);
   const r = run(ok);
   assert.equal(r.status, 0, r.stderr);
-  assert.match(r.stdout, /image: registry\.example\/team\/poppy-agent-tester:abc1234/);
+  assert.match(r.stdout, /image: registry\.example\/team\/poppy-demo:abc1234/);
   assert.match(r.stdout, /host: app\.demo\.example/);
   assert.match(r.stdout, /kind: Certificate/);
   assert.match(r.stdout, /ingressClassName: class-x/);

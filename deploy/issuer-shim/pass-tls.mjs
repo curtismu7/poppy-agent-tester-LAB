@@ -1,5 +1,5 @@
 // Minimal TLS pass-through: LOCAL_PORT -> UPSTREAM_HOST:UPSTREAM_PORT, SNI untouched.
-// Used by the poppy-agent-tester compose so the agent can reach the demo Company by
+// Used by the poppy-demo compose so the agent can reach the demo Company by
 // the name its certificate and poppy.json use, from inside the Docker network.
 import https from 'node:https';
 import net from 'node:net';

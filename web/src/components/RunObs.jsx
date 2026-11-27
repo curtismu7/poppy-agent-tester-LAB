@@ -10,7 +10,7 @@ const TITLE = "What each layer logged for this run";
 
 // Where this lab's own logs live and where they stream (the README says the same).
 export const RUN_OBS_STREAMS = [
-  { product: "Poppy Agent Tester server (this lab)", lives: "the lab container's stdout: one timestamped line per step (who decided, the outcome; never a token or an id)", streams: "the family log collector to demo-logs-poppy-agent-tester, then a SIEM, when the collector is set to watch this container (the lab does not ship them itself)" },
+  { product: "Poppy demo server (this lab)", lives: "the lab container's stdout: one timestamped line per step (who decided, the outcome; never a token or an id)", streams: "the family log collector to demo-logs-poppy-demo, then a SIEM, when the collector is set to watch this container (the lab does not ship them itself)" },
   { product: "PingFederate", lives: "container stdout (the image tails audit.log and server.log)", streams: "the collector to ping-logs-pingfederate, then a SIEM (audit.log is not shipped today)" },
   { product: "PingOne (sign-in)", lives: "the PingOne audit activity API (SaaS)", streams: "not shipped or read here yet" },
   { product: "The Company you typed", lives: "wherever that server writes its log; this lab does not know", streams: "not read by this lab" },

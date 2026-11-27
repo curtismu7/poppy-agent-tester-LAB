@@ -17,27 +17,27 @@ try { process.loadEnvFile(fileURLToPath(new URL('../../.env', import.meta.url)))
 
 const checks = await runChecks();
 if (!allPassed(checks)) {
-  for (const c of checks.filter((x) => x.level === 'fail')) console.error(`[poppy-agent-tester] refusing to start: ${c.id}: ${c.detail}`);
+  for (const c of checks.filter((x) => x.level === 'fail')) console.error(`[poppy-demo] refusing to start: ${c.id}: ${c.detail}`);
   process.exit(1);
 }
 const host = assertBindAllowed(bindHost(), process.env);
 const dataDir = process.env.PAT_DATA_DIR || path.resolve(fileURLToPath(new URL('../../.data', import.meta.url)));
 const hosted = hostedFrom(process.env);
-console.log(`[poppy-agent-tester] MODE=${process.env.MODE || 'live'}${hosted ? ' (hosted: explains and shows an example run, reaches nothing)' : ' (live: reaches only the hosts you type)'}`);
+console.log(`[poppy-demo] MODE=${process.env.MODE || 'live'}${hosted ? ' (hosted: explains and shows an example run, reaches nothing)' : ' (live: reaches only the hosts you type)'}`);
 const port = resolvePort();
 // LAB_ALLOWED_HOSTS (the family lab-proxy's name for this lab) is parsed before the server starts.
 const proxyHosts = labProxyHosts(process.env, port);
 // The chat tab's live agent needs a model key; without one (or in the hosted build) the chat is the guided script.
 const chatCfg = chatConfigFrom(process.env);
 const chat = !hosted && chatCfg.apiKey ? { client: createChatClient(chatCfg), model: chatCfg.model } : null;
-console.log(`[poppy-agent-tester] chat agent: ${chat ? `live (${chat.model})` : 'guided script (set ANTHROPIC_API_KEY for a live agent)'}`);
+console.log(`[poppy-demo] chat agent: ${chat ? `live (${chat.model})` : 'guided script (set ANTHROPIC_API_KEY for a live agent)'}`);
 const app = createApp({ agent: hosted ? null : loadAgentKey(dataDir), hosted, baseUrl: baseUrlFrom(), proxyHosts, chat, registered: registeredFrom() });
 if (process.env.PAT_TLS_CERT && process.env.PAT_TLS_KEY) {
   // PingFederate fetches the agent's client metadata over https, so the agent URL needs a certificate PF trusts.
   const server = https.createServer({ cert: fs.readFileSync(process.env.PAT_TLS_CERT), key: fs.readFileSync(process.env.PAT_TLS_KEY) }, app);
-  server.listen(port, host, () => console.log(`[poppy-agent-tester] https://${host}:${port}/ (agent client_id ${baseUrlFrom() || 'not set'}/client.json)`));
+  server.listen(port, host, () => console.log(`[poppy-demo] https://${host}:${port}/ (agent client_id ${baseUrlFrom() || 'not set'}/client.json)`));
 } else {
   const { url } = await startHttpServer({ port, host, app });
-  console.log(`[poppy-agent-tester] ${url} (${host === '127.0.0.1' || host === '::1' || host === 'localhost' ? 'loopback' : `bound to ${host}; in a container compose publishes it on 127.0.0.1 only`})`);
+  console.log(`[poppy-demo] ${url} (${host === '127.0.0.1' || host === '::1' || host === 'localhost' ? 'loopback' : `bound to ${host}; in a container compose publishes it on 127.0.0.1 only`})`);
 }
-console.log(`[poppy-agent-tester] health: /api/health`);
+console.log(`[poppy-demo] health: /api/health`);

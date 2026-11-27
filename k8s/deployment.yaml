@@ -1,18 +1,18 @@
-# MOCK-ONLY hosted build of poppy-agent-tester for the SE cluster (rule 18). Same image as the standalone, MODE=mock,
+# MOCK-ONLY hosted build of poppy-demo for the SE cluster (rule 18). Same image as the standalone, MODE=mock,
 # PAT_HOSTED=1 (the banner then says HOSTED SIMULATION). No secrets, no tenant ids, no volumes with data.
 # Placeholders (__IMAGE__, __SE_HOST__, __INGRESS_CLASS__, __CLUSTER_ISSUER__) are filled by k8s/deploy.sh; nothing here names a real host or registry path.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: poppy-agent-tester
-  labels: { app: poppy-agent-tester }
+  name: poppy-demo
+  labels: { app: poppy-demo }
 spec:
   replicas: 1   # the only state is a small in-memory list of evaluations per workspace id (X-Workspace), so visitors are isolated by workspace; one pod because that state is not shared
   selector:
-    matchLabels: { app: poppy-agent-tester }
+    matchLabels: { app: poppy-demo }
   template:
     metadata:
-      labels: { app: poppy-agent-tester }
+      labels: { app: poppy-demo }
     spec:
       automountServiceAccountToken: false
       securityContext:

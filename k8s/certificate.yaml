@@ -3,9 +3,9 @@
 apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:
-  name: poppy-agent-tester
+  name: poppy-demo
 spec:
-  secretName: poppy-agent-tester-tls
+  secretName: poppy-demo-tls
   dnsNames:
     - __SE_HOST__
   issuerRef:

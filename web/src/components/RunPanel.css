@@ -69,13 +69,17 @@
 /* Rule 27: the shared run-observability panel and the note under it (tokens only). */
 .rp-obs { margin-top: 12px; display: grid; gap: 8px; }
 
-/* The Agent tab's step timeline (tokens only). */
-.agent-steps { list-style: none; margin: 14px 0 0; padding: 0; display: grid; gap: 10px; }
-.agent-step { display: flex; gap: 12px; align-items: flex-start; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); padding: 12px 14px; }
-.agent-step__mark { flex: none; width: 28px; height: 28px; border-radius: 50%; border: 1px solid var(--border); display: grid; place-items: center; font-weight: 600; }
-.agent-step--active { border-color: var(--accent); }
-.agent-step--active .agent-step__mark { border-color: var(--accent); color: var(--accent); }
-.agent-step--done { opacity: 0.85; }
+/* The Agent tab's step timeline (tokens only). Presentation-scale type: this page is what an
+   audience reads, so the step names and the highlighted facts are larger than body copy
+   (the top-menu Text size control still scales everything, via rem). */
+.agent-steps { list-style: none; margin: 18px 0 0; padding: 0; display: grid; gap: 14px; }
+.agent-step { display: flex; gap: 16px; align-items: flex-start; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); padding: 18px 20px; }
+.agent-step__mark { flex: none; width: 40px; height: 40px; border-radius: 50%; border: 1px solid var(--border); display: grid; place-items: center; font-weight: 700; font-size: var(--font-size-lg); }
+.agent-step--active { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.agent-step--active .agent-step__mark { border-color: var(--accent); color: var(--accent); font-weight: 800; }
 .agent-step--done .agent-step__mark { background: var(--accent); border-color: var(--accent); color: var(--surface); }
-.agent-step h3 { margin: 0 0 4px; font-size: 1em; }
-.agent-step p { margin: 0; color: var(--muted); }
+.agent-step h3 { margin: 0 0 6px; font-size: var(--font-size-lg); line-height: 1.3; }
+.agent-step p { margin: 0; color: var(--text-body); font-size: var(--font-size-base); line-height: 1.55; }
+.agent-step p b, .agent-step p strong { font-size: 1.12em; } /* anything highlighted reads larger */
+.agent-lede { margin: 0; color: var(--text-body); font-size: var(--font-size-lg); line-height: 1.5; max-width: 90ch; }
+.agent-lede b, .agent-lede strong { font-size: 1.12em; }

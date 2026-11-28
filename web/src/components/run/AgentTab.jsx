@@ -1,9 +1,9 @@
 // The Agent tab: the simple view. One screen, the three moves Poppy makes as a step timeline,
 // auto-run or step-by-step. The wire detail lives on the Details tab.
 const STEPS = [
-  { id: "discover", label: "Read the Company", what: "The agent reads two public documents: poppy.json (scopes and APIs) and the protected-resource document (the authorization server). No registration, no secret." },
-  { id: "signin", label: "Sign in as the agent", what: "The client_id is the agent's metadata URL. PingFederate fetches it; the person signs in and allows the scope." },
-  { id: "call", label: "Call with token and Poppy-Session", what: "Each request carries the access token and a signed Poppy-Session naming this method, this URL and this token." },
+  { id: "discover", label: "Read the Company", what: <>The agent reads two public documents: <b>poppy.json</b> (scopes and APIs) and the <b>protected-resource document</b> (the authorization server). <b>No registration, no secret.</b></> },
+  { id: "signin", label: "Sign in as the agent", what: <>The <b>client_id is the agent's metadata URL</b>. PingFederate fetches it; the person signs in and allows the scope.</> },
+  { id: "call", label: "Call with token and Poppy-Session", what: <>Each request carries the <b>access token</b> and a signed <b>Poppy-Session</b> naming this method, this URL and this token.</> },
 ];
 
 export default function AgentTab({ ui, c }) {
@@ -14,7 +14,7 @@ export default function AgentTab({ ui, c }) {
   return (
     <section className="rp-page" aria-labelledby="agent-h">
       <h2 id="agent-h" className="rp-title">Poppy, your personal agent</h2>
-      <p className="muted">An agent arrives at a Company with no client registration and no shared secret: it names itself with a URL, the person signs in, and every call carries a signed session.</p>
+      <p className="agent-lede">An agent arrives at a Company with <b>no client registration</b> and <b>no shared secret</b>: it names itself with a URL, the person signs in, and every call carries a signed session.</p>
       {ui}
       <div className="rp-controls">
         <p className="rp-controls__main">

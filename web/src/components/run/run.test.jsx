@@ -84,19 +84,19 @@ describe("buildRows", () => {
 });
 
 describe("the three pages", () => {
-  it("one primary per page: Next on the first page, Start flow (1 click) on the calls page (Next is plain there)", async () => {
+  it("one primary per page: Start flow is the one primary on the agent and calls pages (Next is plain there)", async () => {
     mockApi();
     render(<App />);
     const primaries = () => [...document.querySelectorAll("main button.primary")].map((x) => x.dataset.testid);
-    expect(primaries()).toEqual(["pager-next"]);
+    expect(primaries()).toEqual(["one-click"]);
     fireEvent.click(screen.getByTestId("pager-next"));
     expect(primaries()).toEqual(["one-click"]);
   });
-  it("opens on what and why, and Next / Prev / the dots move between pages", async () => {
+  it("opens on the agent, and Next / Prev / the dots move between pages", async () => {
     mockApi();
     render(<App />);
-    expect(screen.getByText(/Personal Agent Protocol . spec 1\.0/)).toBeInTheDocument();
-    expect(screen.queryByTestId("one-click")).toBeNull();
+    expect(screen.getByTestId("agent-steps")).toBeInTheDocument();
+    expect(screen.getByTestId("intro-clients").textContent).toMatch(/PingOne has no CIMD.*registered client_id.*PAT_P1_CLIENT_ID and PAT_DEMO_P1_ISSUER/);
     fireEvent.click(screen.getByTestId("pager-next"));
     expect(screen.getByRole("heading", { name: "The calls" })).toBeInTheDocument();
     fireEvent.click(screen.getByTestId("pager-next"));
@@ -105,7 +105,7 @@ describe("the three pages", () => {
     fireEvent.click(screen.getByTestId("pager-prev"));
     expect(screen.getByRole("heading", { name: "The calls" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /Page 1 of 3/ }));
-    expect(screen.getByRole("heading", { name: /Your agent/ })).toBeInTheDocument();
+    expect(screen.getByTestId("agent-steps")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Page 1 of 3/ })).toHaveAttribute("aria-current", "page");
   });
   it("coming back from the authorization server (?signin=ok) lands on the calls page with the result", async () => {

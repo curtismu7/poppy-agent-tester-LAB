@@ -10,7 +10,7 @@ export default function Pager({ page, pages, onPage, plainNext = false }) {
           <button key={name} type="button" className="pager__dot" aria-label={`Page ${i + 1} of ${last}: ${name}`} aria-current={page === i + 1 ? "page" : undefined} onClick={() => onPage(i + 1)} />
         ))}
       </span>
-      {/* ui-pattern: allow P9 Next is the primary only on pages without their own; on the calls page RunPanel passes plainNext, so Start flow (1 click) is the one primary there */}
+      {/* ui-pattern: allow P9 Next is the primary only on pages without their own; on the calls page RunPanel passes plainNext, so Start flow is the one primary there */}
       {page < last ? <button type="button" className={plainNext ? undefined : "primary"} onClick={() => onPage(page + 1)} data-testid="pager-next">Next: {pages[page]} &rarr;</button> : <span />}
     </nav>
   );

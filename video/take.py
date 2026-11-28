@@ -93,9 +93,10 @@ MASK_JS = """(() => {
       if (v !== a.value) a.value = v;
     }
   }
-  const start = () => { walk(document.body); new MutationObserver(() => walk(document.body)).observe(document.body, {childList: true, subtree: true, characterData: true}); };
+  const scrubFields = () => { for (const el of document.querySelectorAll('input, textarea')) { let v = el.value; if (!v) continue; for (const [pat, rep] of CFG.rules) v = v.replace(new RegExp(pat, 'g'), rep); if (v !== el.value) el.value = v; } };
+  const start = () => { walk(document.body); scrubFields(); new MutationObserver(() => { walk(document.body); scrubFields(); }).observe(document.body, {childList: true, subtree: true, characterData: true}); setInterval(scrubFields, 400); };
   if (document.body) start(); else document.addEventListener('DOMContentLoaded', start);
-  window.__maskLeak = () => { const m = ((document.body && document.body.innerText) || '').match(new RegExp(CFG.leak, 'i')); return m ? m[0] : null; };
+  window.__maskLeak = () => { const t = ((document.body && document.body.innerText) || '') + '|' + [...document.querySelectorAll('input, textarea')].map((e) => e.value).join('|'); const m = t.match(new RegExp(CFG.leak, 'i')); return m ? m[0] : null; };
 })();
 """
 

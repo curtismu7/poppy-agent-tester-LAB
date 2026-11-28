@@ -2,16 +2,16 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { getJson, postJson } from "../api";
 import Json, { POPPY_HOT } from "./Json";
 import Pager from "./run/Pager";
-import IntroPage from "./run/IntroPage";
 import CallsPage from "./run/CallsPage";
 import TokenPage from "./run/TokenPage";
+import AgentTab from "./run/AgentTab";
 import RunObs from "./RunObs";
 
 const ERR = { issuer_mismatch: "The issuer you typed is not the one the Company publishes.", hosted_simulation: "This hosted build explains and shows an example run; run the standalone to reach a real Company.", agent_not_configured: "Set PAT_AGENT_BASE_URL (an https URL the authorization server can reach; for a PingOne registered client http://127.0.0.1:5450 also works), then restart.", discover_first: "Read the Company first.", sign_in_first: "Sign in first." };
 // A server message that names the real values (the issuer the Company publishes, the host that failed) beats a generic one.
 const say = (r) => (["issuer_mismatch", "upstream", "no_sub", "par_failed"].includes(r.body.error) ? r.body.message : ERR[r.body.error]) || r.body.message || r.body.error || `HTTP ${r.status}`;
 
-const PAGES = ["What & why", "The calls", "Token & session"];
+const PAGES = ["The agent", "The calls", "Token & session"];
 // Coming back from the authorization server (?signin=ok|error) lands on the calls page, where the result is.
 const startPage = () => (new URLSearchParams(window.location.search).get("signin") ? 2 : 1);
 
@@ -28,6 +28,7 @@ export default function RunPanel({ info, resetSignal }) {
   const [mismatch, setMismatch] = useState(null);
   const [useResource, setUseResource] = useState(false);
   const [as, setAs] = useState("pf");
+  const [stepMode, setStepMode] = useState(false);
   useEffect(() => { if (info?.hosted) getJson("/api/sample").then(setSample, () => setSample(null)); }, [info]);
 
   const refresh = useCallback(() => getJson("/api/state").then((s) => {
@@ -110,13 +111,13 @@ export default function RunPanel({ info, resetSignal }) {
     </>
   );
 
-  const ctx = { info, state, busy, off, scopes, scope, setScope, origin, setOrigin, issuer, setIssuer, path, setPath, useResource, setUseResource, mismatch, as, pickAs, oneClick, discover, signIn, call };
+  const ctx = { info, state, busy, off, scopes, scope, setScope, origin, setOrigin, issuer, setIssuer, path, setPath, useResource, setUseResource, mismatch, as, pickAs, oneClick, discover, signIn, call, stepMode, setStepMode };
   return (
     <div className="rp">
-      {page === 1 && <IntroPage />}
+      {page === 1 && (stepMode ? <CallsPage ui={notices} c={ctx} /> : <AgentTab ui={notices} c={ctx} />)}
       {page === 2 && <><CallsPage ui={notices} c={ctx} /><RunObs mode={info?.source} tick={obsTick} reset={resetSignal} /></>}
       {page === 3 && <TokenPage state={state} />}
-      <Pager page={page} pages={PAGES} plainNext={page === 2} onPage={(n) => { setPage(n); window.scrollTo?.({ top: 0 }); }} />
+      <Pager page={page} pages={PAGES} plainNext={page !== 3} onPage={(n) => { setPage(n); window.scrollTo?.({ top: 0 }); }} />
     </div>
   );
 }

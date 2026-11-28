@@ -97,6 +97,9 @@ function useNarrow() {
 
 function Lane({ layer, rows, coverage, reason, partial, active, onPick }) {
   const own = rows.filter((r) => r.layer === layer.id && r.origin !== "not-logged");
+  // The owner asked the simple demo not to advertise layers that logged nothing: a lane whose only
+  // news is "not-logged" (and not unreachable, which is worth knowing) stays out of the list.
+  if (coverage === "not-logged" && !partial) return null;
   return (
     <li className="ro-lane" data-testid={`ro-lane-${layer.id}`} data-layer={layer.id} data-coverage={coverage || "unknown"}>
       <button type="button" className="ro-lane-name" aria-pressed={active} onClick={onPick} title={`Show only ${layer.label} rows`}>

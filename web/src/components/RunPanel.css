@@ -68,3 +68,14 @@
 
 /* Rule 27: the shared run-observability panel and the note under it (tokens only). */
 .rp-obs { margin-top: 12px; display: grid; gap: 8px; }
+
+/* The Agent tab's step timeline (tokens only). */
+.agent-steps { list-style: none; margin: 14px 0 0; padding: 0; display: grid; gap: 10px; }
+.agent-step { display: flex; gap: 12px; align-items: flex-start; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); padding: 12px 14px; }
+.agent-step__mark { flex: none; width: 28px; height: 28px; border-radius: 50%; border: 1px solid var(--border); display: grid; place-items: center; font-weight: 600; }
+.agent-step--active { border-color: var(--accent); }
+.agent-step--active .agent-step__mark { border-color: var(--accent); color: var(--accent); }
+.agent-step--done { opacity: 0.85; }
+.agent-step--done .agent-step__mark { background: var(--accent); border-color: var(--accent); color: var(--surface); }
+.agent-step h3 { margin: 0 0 4px; font-size: 1em; }
+.agent-step p { margin: 0; color: var(--muted); }

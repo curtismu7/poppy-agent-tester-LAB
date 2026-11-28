@@ -52,7 +52,8 @@ describe("RunObservability", () => {
     expect(within(table).queryByText("logged")).toBeNull();
     expect(screen.getByTestId("ro-summary")).toHaveTextContent("2 allowed, 1 refused, 1 blocked, 1 for information (information is not a pass)");
     expect(screen.getByTestId("ro-coverage-person")).toHaveTextContent("Simulated");
-    expect(screen.getByTestId("ro-coverage-authorize")).toHaveTextContent("Not logged");
+    // The owner asked the simple demo not to advertise layers that logged nothing: a not-logged lane (Authorize here) is hidden.
+    expect(screen.queryByTestId("ro-coverage-authorize")).toBeNull();
   });
 
   test("real: logged rows show the log line's own timestamp to the nanosecond; a not-logged row says so and has no timestamp", () => {
@@ -63,7 +64,8 @@ describe("RunObservability", () => {
     expect(nl).toHaveTextContent("no timestamp");
     expect(nl).toHaveTextContent("not logged");
     expect(nl).toHaveTextContent(/No matching line was found/);
-    expect(screen.getByTestId("ro-coverage-agent")).toHaveTextContent("Not logged");
+    // The owner asked the simple demo not to advertise layers that logged nothing: a not-logged lane (Agent here) is hidden.
+    expect(screen.queryByTestId("ro-coverage-agent")).toBeNull();
     expect(screen.getByTestId("ro-coverage-person")).toHaveTextContent("Logged");
   });
 

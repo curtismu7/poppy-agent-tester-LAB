@@ -12,3 +12,34 @@
   --font-size-lg: 18px;
   --font-size-xl: 24px;
 }
+
+/* Legacy th- and dc- token aliases (diagram components vendored from older labs) mapped to the
+   shared tokens. Every chain terminates in a standalone-ui.css token; never introduce a colour literal here. */
+:root {
+  --th-text: var(--text);
+  --th-text-muted: var(--muted);
+  --th-bg-card: var(--surface);
+  --th-bg-inset: var(--surface-2);
+  --th-bg-page: var(--bg);
+  --th-border: var(--border);
+  --th-border-strong: var(--border);
+  --th-focus-ring: var(--focus);
+  --th-status-info: var(--status-info);
+  --th-status-info-bg: var(--accent-soft);
+  --th-status-info-text: var(--status-info);
+  --th-status-warning: var(--status-warn);
+  --th-status-warning-bg: var(--accent-soft);
+  --th-status-warning-text: var(--status-warn);
+  --th-status-error: var(--danger-text);
+  --th-status-error-bg: var(--accent-soft);
+  --th-status-error-text: var(--danger-text);
+  --th-accent: var(--accent);
+  --dc-white: var(--surface);
+  --dc-grey-2: var(--surface-2);
+  --dc-grey-4: var(--surface-2);
+  --dc-info: var(--status-info);
+  --dc-seq-ink: var(--text);
+  --dc-green: var(--status-ok);
+  --dc-amber: var(--status-warn);
+  --dc-red: var(--danger-text);
+}

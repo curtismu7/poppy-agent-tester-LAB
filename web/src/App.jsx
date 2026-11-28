@@ -8,6 +8,7 @@ import TopMenu, { applyFontSize } from "./top-menu/TopMenu.jsx";
 import TalkTrackDialog from "./talk-track/TalkTrackDialog.jsx";
 import VerifyMark from "./components/VerifyMark.jsx";
 import StoryToggle, { storyKey } from "./story/StoryToggle.jsx";
+import ModeModal from "./mode-modal/ModeModal.jsx";
 
 const StoryRoot = lazy(() => import("./StoryRoot.jsx"));
 
@@ -21,11 +22,15 @@ export const TABS = [
   { id: "why", label: "Why Poppy" },
   { id: "talk", label: "Talk track" },
 ];
-// Never blank and never claims "not hosted" before it knows: until /api/info answers (or if it fails) it says both.
-export const BANNER_UNKNOWN = "LIVE or HOSTED SIMULATION: this page is loading. A local run talks to the Company and PingFederate you name; the hosted build only explains and shows an example.";
-export const BANNER_FAILED = "MODE UNKNOWN: the page could not read /api/info from its server, so it cannot say whether this is a live run or a hosted simulation. Every action is off until the server answers.";
-const BANNER_LOCAL = "LIVE: this agent talks to the real Company and the real PingFederate you name, and to nothing else. Only the person (a demo user) and the agent are test data.";
-const BANNER_HOSTED = "HOSTED SIMULATION: this build explains the flow and shows an example run with invented values. It reaches no Company and no PingFederate. Run the standalone to try it for real.";
+// The Real-or-mock modal's lines (shared/mode-modal). It never claims "not hosted" before it knows: it is held until /api/info answers. A hosted build is Mock (a simulation),
+// a local run is Real; if /api/info fails the modal says MOCK, the cautious label, with the line that the mode is unknown (its own storage key, so dismissing it does not hide the right line later).
+export const MODE_LINES = {
+  mock: "This hosted build explains the flow and shows an example run with invented values. It reaches no Company and no PingFederate; run the standalone to try it for real.",
+  real: "This agent talks to the real Company and the real PingFederate you name, and to nothing else. Only the person (a demo user) and the agent are test data.",
+};
+export const UNKNOWN_LINES = {
+  mock: "The page could not read /api/info from its server, so it cannot say whether this is a live run or a hosted simulation. Every action is off until the server answers.",
+};
 
 const hashTab = () => { const h = window.location.hash.replace("#", ""); return TABS.some((t) => t.id === h) ? h : "run"; };
 
@@ -100,7 +105,6 @@ export default function App() {
   };
 
   const hosted = info ? !!info.hosted : null;
-  const banner = info === null ? BANNER_FAILED : hosted === true ? BANNER_HOSTED : hosted === false ? BANNER_LOCAL : BANNER_UNKNOWN;
   return (
     <div className={`app${presenter ? " app--presenter" : ""}`}>
       <header className="shell-bar">
@@ -137,7 +141,6 @@ export default function App() {
         </TopMenu>
       </header>
       <main className="page">
-        <p className="banner" role="status" data-testid="banner">{banner}</p>
         <p className="sr-only" role="status" aria-live="polite">{resetMsg}</p>
         {!presenter && <p className="intro">Play the personal agent from the Personal Agent Protocol: discover a Company, sign in with a URL as your client id, and call its API with a signed Poppy-Session.</p>}
         <div id={`panel-${tab}`}>
@@ -165,6 +168,7 @@ export default function App() {
         </div>
       </main>
 
+      <ModeModal mode={hosted === false ? "real" : "mock"} lines={info === null ? UNKNOWN_LINES : MODE_LINES} suppress={storyOn || info === undefined} storageKey={info === null ? "pat-mode-unknown" : "pat-mode"} />
       <TalkTrackDialog isOpen={talkOpen} onClose={() => setTalkOpen(false)} talk={story?.talkTrack ?? []} />
     </div>
   );

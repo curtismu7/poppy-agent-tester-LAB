@@ -139,6 +139,8 @@ def main():
             args=[f"--window-position={WIN_X},{WIN_Y}", f"--window-size={WIN_W},{WIN_H}", "--no-first-run", "--no-default-browser-check", *([] if HEADLESS else ["--kiosk"])])
         ctx.add_init_script("window.__cmScale = " + json.dumps(SCALE) + ";")
         ctx.add_init_script(overlay_script())
+        # The Real-or-mock modal opens on a fresh session and would cover the page: dismissed in advance (the released video is not re-recorded; this only keeps the script running).
+        ctx.add_init_script("try { for (const k of ['pat-mode', 'pat-mode-unknown']) for (const m of ['mock', 'real']) sessionStorage.setItem(k + '-seen-' + m, '1'); } catch (e) {}")
         if not SAMPLE:
             _mask = mask_config(); log("host masking on:", _mask["hosts"], "hosts from the lab .env")
             ctx.add_init_script(MASK_JS.replace("__CFG__", json.dumps(_mask)))

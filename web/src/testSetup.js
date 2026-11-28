@@ -1,4 +1,5 @@
 import "@testing-library/jest-dom/vitest";
+import { afterEach } from "vitest";
 
 // React Flow measures the DOM; jsdom has no layout, so give it the few browser APIs it reads.
 class RO { observe() {} unobserve() {} disconnect() {} }
@@ -22,3 +23,6 @@ if (typeof globalThis.localStorage?.clear !== "function") {
 Element.prototype.scrollTo = Element.prototype.scrollTo || function scrollTo() {};
 Element.prototype.scrollIntoView = Element.prototype.scrollIntoView || function scrollIntoView() {};
 window.scrollTo = () => {};
+
+// The Real-or-mock modal is dismissed once per browser session: every test starts with it showing again.
+afterEach(() => { try { sessionStorage.clear(); } catch { /* none */ } });

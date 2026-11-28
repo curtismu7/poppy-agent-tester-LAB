@@ -192,7 +192,7 @@ The videos were reviewed frame by frame (OCR over every third frame plus visual 
 
 ## Presenting
 
-Press `P` for presenter mode; the simulation banner stays. The talk track is in [docs/talk-track.md](docs/talk-track.md). Brand it with `customer.config.json` (see the example) or the vertical picker.
+Press `P` for presenter mode; the page opens on a Real-or-mock modal (MOCK on the hosted build, REAL on a local run) that you dismiss once per browser session. The talk track is in [docs/talk-track.md](docs/talk-track.md). Brand it with `customer.config.json` (see the example) or the vertical picker.
 
 ## On hold: the hosted (SE) form
 

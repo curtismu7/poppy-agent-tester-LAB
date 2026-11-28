@@ -16,7 +16,7 @@ code { font-size: var(--font-size-2xs); }
 .shell-nav a[aria-current="page"] { background: var(--accent-gradient); color: var(--on-accent); font-weight: 600; }
 .shell-bar .shell-right { margin-left: auto; } /* TopMenu renders .top-menu.shell-right; its own layout stays */
 @media (max-width: 600px) { .shell-bar { gap: 10px; padding: 10px 16px; } .shell-nav { order: 3; flex-basis: 100%; flex-wrap: wrap; } }
-/* Page frame (section 3): one centred 1100px column; the simulation banner is its first child. */
+/* Page frame (section 3): one centred 1100px column. */
 .page { max-width: 2200px; margin: 0 auto; padding: 4px 0 32px; }
 html { font-size: var(--fs, 16px); }
 .intro { margin: 12px 0; max-width: 70ch; color: var(--muted); font-size: var(--font-size-sm); line-height: 1.45; }
@@ -29,7 +29,7 @@ html { font-size: var(--fs, 16px); }
 .track__now p { margin: 0; font-size: var(--font-size-base); line-height: 1.5; }
 .keys { color: var(--muted); font-size: var(--font-size-2xs); }
 .app-error { padding: 16px; color: var(--danger-text); }
-/* Presenter mode: less chrome, bigger talk track. The simulation banner stays. */
+/* Presenter mode: less chrome, bigger talk track. */
 .app--presenter .track__now h2, .track__now h3 { font-size: var(--font-size-xl); }
 .app--presenter .track__now p { font-size: var(--font-size-lg); line-height: 1.55; }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }

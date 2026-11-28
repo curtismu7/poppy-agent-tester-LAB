@@ -28,18 +28,18 @@
   text-align: left;
   border: 1.5px solid var(--control-border);
   border-radius: var(--radius-md);
-  background: var(--th-bg-card);
-  color: var(--th-text);
+  background: var(--surface);
+  color: var(--text);
   cursor: pointer;
   font: inherit;
 }
-.dreel-card:hover { border-color: var(--th-status-info); }
-.dreel-card:focus-visible { outline: 3px solid var(--th-focus-ring); outline-offset: 2px; }
-.dreel-card--done { background: var(--th-bg-inset); }
+.dreel-card:hover { border-color: var(--accent); }
+.dreel-card:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.dreel-card--done { background: var(--surface-2); }
 .dreel-card--now {
-  border-color: var(--th-status-info);
-  background: var(--th-status-info-bg);
-  box-shadow: 0 0 0 2px var(--th-status-info);
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  box-shadow: 0 0 0 2px var(--accent);
 }
 
 .dreel-n {
@@ -47,14 +47,14 @@
   min-width: 22px;
   padding: 1px 6px;
   border-radius: var(--radius-pill);
-  background: var(--th-text-muted);
-  color: var(--th-bg-card);
+  background: var(--muted);
+  color: var(--surface);
   font-size: var(--font-size-2xs);
   font-weight: 700;
   text-align: center;
   font-variant-numeric: tabular-nums;
 }
-.dreel-card--now .dreel-n { background: var(--th-status-info); color: var(--dc-white); }
+.dreel-card--now .dreel-n { background: var(--accent); color: var(--on-accent); }
 .dreel-title {
   font-size: var(--font-size-2xs);
   font-weight: 700;
@@ -87,8 +87,8 @@
   padding: 2px 10px;
   border: 1px solid var(--control-border);
   border-radius: var(--radius-md);
-  background: var(--th-bg-card);
-  color: var(--th-text);
+  background: var(--surface);
+  color: var(--text);
   font-size: var(--font-size-2xs);
   cursor: pointer;
 }
@@ -124,6 +124,6 @@
 .dreel-json-lit { color: var(--dc-red); }
 .dreel-font { margin-left: auto; display: inline-flex; gap: 4px; }
 .dreel-font button { min-width: 32px; padding: 2px 8px; border: 1px solid var(--control-border); border-radius: var(--radius-md); background: transparent; color: inherit; font: inherit; font-weight: 700; cursor: pointer; }
-.dreel-font button[aria-pressed="true"] { background: var(--th-status-info-bg); border-color: var(--th-status-info); }
+.dreel-font button[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); }
 .dreel-detail[data-font-size="small"] { zoom: 0.9; }
 .dreel-detail[data-font-size="large"] { zoom: 1.25; }
